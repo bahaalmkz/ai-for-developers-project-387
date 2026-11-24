@@ -1,0 +1,4 @@
+# tsp compile пишет LF; без этого при core.autocrlf=true файл после генерации выглядит изменённым
+contract/openapi.yaml text eol=lf
+# Скрипты запускаются в Linux (CI, контейнер): только LF
+*.sh text eol=lf

@@ -1,0 +1,17 @@
+# Зависимости и сборка
+node_modules/
+dist/
+backend/target/
+# Файл БД H2 (там email гостей): путь зависит от каталога запуска бэкенда
+data/
+frontend/src/api/generated/
+
+# Рабочие копии агентов Claude Code
+.claude/worktrees/
+
+# IDE и система
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,28 @@
+amends "package://github.com/jdx/hk/releases/download/v2.13.0/hk@2.13.0#/Config.pkl"
+
+// Git-хуки вызывают те же задачи mise, что и GitHub Actions.
+// pre-commit: быстрые линтеры; pre-push: полная проверка.
+hooks {
+  ["pre-commit"] {
+    steps {
+      ["lint"] {
+        check = "mise run lint"
+      }
+    }
+  }
+  ["pre-push"] {
+    steps {
+      ["check"] {
+        check = "mise run check"
+      }
+    }
+  }
+  // Формат коммитов: Conventional Commits, правила в commitlint.config.mjs
+  ["commit-msg"] {
+    steps {
+      ["commitlint"] {
+        check = "npx --no-install commitlint --edit \"{{commit_msg_file}}\""
+      }
+    }
+  }
+}

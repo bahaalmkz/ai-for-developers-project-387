@@ -1,0 +1,11 @@
+# Render Blueprint: веб-сервис из Dockerfile в корне. Render передаёт порт в PORT (по умолчанию 10000).
+services:
+  - type: web
+    name: calendar
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeploy: true

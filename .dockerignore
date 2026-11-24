@@ -1,0 +1,12 @@
+# В контекст сборки попадает только исходный код, без локальных артефактов
+.git
+.github
+.claude
+**/node_modules
+**/dist
+**/target
+**/data
+frontend/src/api/generated
+e2e
+docs
+*.md
