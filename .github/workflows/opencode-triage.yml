@@ -1,0 +1,75 @@
+name: opencode-triage
+
+# Агент OpenCode автоматически разбирает новые обращения в Issues по скиллу triage.
+# Описание (событие, фильтры, метки, что пропускается, тайм-аут и параллельность) —
+# в README.md, раздел «Агент в GitHub».
+
+on:
+  # Новое обращение в Issues. У события нет комментария с командой,
+  # поэтому инструкция агенту передаётся во входе prompt.
+  issues:
+    types: [opened]
+
+concurrency:
+  # Одновременно идёт один разбор на весь репозиторий: следующий ждёт окончания текущего.
+  # GitHub держит в очереди только один ожидающий прогон, более ранний ожидающий отменяется;
+  # такое обращение разбирают вручную командой /oc.
+  group: opencode-triage
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  triage:
+    # Разбор только если:
+    # - автор — владелец или участник репозитория (не посторонний);
+    # - автор не бот (агент не разбирает сам себя);
+    # - у issue нет метки ready-for-agent: тикеты и спецификации от to-spec/to-tickets
+    #   уже готовы и повторно не разбираются.
+    if: >-
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
+      && github.event.issue.user.type != 'Bot'
+      && !contains(github.event.issue.labels.*.name, 'ready-for-agent')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Стандартная авторизация OpenCode: токен GitHub App через OIDC.
+    # Комментарий с разбором публикует action правами приложения opencode-agent.
+    # GITHUB_TOKEN с issues: write нужен только команде gh внутри агента:
+    # скилл triage читает issue и ставит метки.
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+    steps:
+      # actions/checkout v4, закреплено по SHA
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      # anomalyco/opencode/github v1.19.6, закреплено по SHA.
+      # Скиллы берутся из .claude/skills/ (OpenCode читает этот каталог), правила — из AGENTS.md,
+      # настройки трекера — из docs/agents/: всё это приходит вместе с checkout.
+      - name: Run OpenCode
+        uses: anomalyco/opencode/github@f4e363c8295fa90a03dddc451882fffe8fbce357 # v1.19.6
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          # Без него gh в шагах агента не авторизован
+          GH_TOKEN: ${{ github.token }}
+        with:
+          model: opencode/deepseek-v4.1-flash-free
+          prompt: |
+            Разбери новое обращение #${{ github.event.issue.number }} по скиллу triage
+            (.claude/skills/triage/SKILL.md), но только предварительно: код не меняй и issue не закрывай.
+
+            1. Прочитай issue целиком (тело, автора, метки) и настройки трекера из docs/agents/.
+               Проверь, что уже умеет приложение: поищи существующую реализацию запрошенного
+               поведения в кодовой базе и сообщи, где искал.
+            2. Предложи категорию (bug или enhancement) и состояние из docs/agents/triage-labels.md.
+               Поставь ровно одну метку категории (bug/enhancement) и ровно одну метку состояния.
+            3. Если данных не хватает, поставь needs-info и оставь комментарий по шаблону
+               «Triage Notes» из скилла: что уже установлено и конкретные вопросы автору.
+               Иначе объясни рекомендацию и следующий шаг.
+            4. Итоговый ответ action опубликует комментарием сам — не создавай комментарии
+               через gh. Начни ответ с дисклеймера из скилла о том, что он сгенерирован ИИ
+               во время триажа. Issue не закрывай и код не меняй.
