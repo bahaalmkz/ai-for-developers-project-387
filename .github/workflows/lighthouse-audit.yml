@@ -1,0 +1,224 @@
+name: lighthouse-audit
+
+# Регулярный аудит страниц приложения: Lighthouse CI собирает отчёт, агент OpenCode разбирает его,
+# записывает вывод в журнал аудита и заводит issue только по новой находке.
+# Описание (расписание, данные, права, дубли, где результат) — в README.md, раздел «Регулярный аудит Lighthouse».
+
+on:
+  schedule:
+    # Раз в сутки: 03:17 UTC = 06:17 по Москве. GitHub может задержать или пропустить запуск.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      training:
+        description: "Добавить учебную находку (явно помеченную, не дефект приложения)"
+        type: boolean
+        default: false
+
+concurrency:
+  # Один аудит на репозиторий: следующий ждёт окончания текущего, а не идёт параллельно
+  # (иначе два агента одновременно не увидят issues друг друга и создадут дубль).
+  group: lighthouse-audit
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  # Сбор данных без модели и без записи в репозиторий: отчёт Lighthouse и сводка — артефакт.
+  lighthouse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      # Адрес приложения — переменная репозитория (Settings → Secrets and variables → Actions → Variables)
+      APP_URL: ${{ vars.APP_URL }}
+    steps:
+      # actions/checkout v4, закреплено по SHA
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      # Бесплатный сервис Render засыпает: будим его и ждём до ~4 минут.
+      # Если приложение так и не ответило, это «нет данных», а не «проблем нет».
+      - name: Wait for the app
+        id: app
+        run: |
+          set -euo pipefail
+          if [ -z "${APP_URL:-}" ]; then
+            echo "::error::Переменная репозитория APP_URL не задана."
+            exit 1
+          fi
+          status="no_data"
+          for _ in $(seq 1 24); do
+            if curl -fsS --max-time 20 -o /dev/null "${APP_URL%/}/api/health"; then
+              status="ok"
+              break
+            fi
+            sleep 10
+          done
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "Приложение ${APP_URL}: $status"
+
+      # Lighthouse CI: по одному прогону на страницу гостя и владельца, отчёты в игнорируемом .audit/
+      - name: Collect Lighthouse report
+        if: steps.app.outputs.status == 'ok'
+        run: |
+          set -euo pipefail
+          base="${APP_URL%/}"
+          npx --yes @lhci/cli@0.15.1 collect \
+            --url="$base/book" --url="$base/owner" \
+            --numberOfRuns=1 \
+            --settings.chromeFlags="--headless=new --no-sandbox"
+          npx --yes @lhci/cli@0.15.1 upload --target=filesystem --outputDir=.audit/lhci
+
+      - name: Summarize report
+        env:
+          AUDIT_STATUS: ${{ steps.app.outputs.status }}
+          TRAINING: ${{ inputs.training || false }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          mkdir -p .audit
+          node scripts/lighthouse-summary.mjs .audit
+          cat .audit/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      # Исходные данные аудита: HTML/JSON-отчёты Lighthouse и сводка. Хранятся 90 дней,
+      # поэтому вывод агента дублируется в журнал аудита в Issues.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: lighthouse-report-${{ github.run_id }}
+          path: .audit/
+          include-hidden-files: true
+          retention-days: 90
+
+  # Агент разбирает сводку, пишет вывод в журнал аудита и заводит issue только по новой находке.
+  agent:
+    needs: lighthouse
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Стандартная авторизация OpenCode: токен GitHub App через OIDC (id-token: write).
+    # Код агент не меняет и PR не создаёт, поэтому contents только на чтение.
+    # GITHUB_TOKEN с issues: write нужен команде gh внутри агента: поиск, создание issues, комментарий в журнал.
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+    steps:
+      - name: Check model key
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: |
+          if [ -z "${OPENCODE_API_KEY:-}" ]; then
+            echo "::error::Секрет OPENCODE_API_KEY не задан (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+
+      # actions/checkout v4, закреплено по SHA
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      # Отчёт кладётся в игнорируемый .audit/ внутри рабочего каталога: вне его агенту читать
+      # запрещено (external_directory: deny), а в коммиты и PR он не попадает.
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: lighthouse-report-${{ github.run_id }}
+          path: .audit/
+
+      # OpenCode 1.19.6 из GitHub Releases с проверкой sha256 (как в opencode.yml)
+      - name: Install OpenCode CLI
+        env:
+          OPENCODE_VERSION: 1.19.6
+          OPENCODE_SHA256: 47734e08968b30cc22a0bffb6d9feeed76ad4aa743213a12122040392d09a057
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.opencode/bin"
+          curl -fsSL --retry 3 -o /tmp/opencode.tar.gz \
+            "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-x64.tar.gz"
+          echo "${OPENCODE_SHA256}  /tmp/opencode.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/opencode.tar.gz -C "$HOME/.opencode/bin"
+          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+
+      # Для schedule и workflow_dispatch комментария с командой нет: инструкция — в PROMPT,
+      # ответ агента остаётся в логе, поэтому вывод агент сам публикует в журнал аудита.
+      - name: Run OpenCode
+        run: opencode github run
+        env:
+          MODEL: opencode/claude-haiku-5-5
+          OPENCODE_PERMISSION: '{"external_directory":"deny","doom_loop":"deny","question":"deny"}'
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          PROMPT: |
+            Ты — агент регулярного аудита страниц приложения. Код не меняй, коммиты и PR не создавай,
+            файлы вне каталога .audit/ не пиши. Все действия в GitHub — через gh в репозитории
+            ${{ github.repository }}.
+
+            Исходные данные (уже скачаны, это артефакт прогона lighthouse-report-${{ github.run_id }}):
+            - .audit/summary.json — сводка: appUrl, status (ok | no_data), training, pages (оценки
+              категорий по страницам), findings (находки: key, training, auditId, category, title,
+              description, pages с path/score/displayValue);
+            - .audit/summary.md — та же сводка для человека;
+            - .audit/lhci/ — полные отчёты Lighthouse (HTML и JSON), читай только при необходимости.
+            Проверяемое приложение: ${{ vars.APP_URL }}. Прогон: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            1. Прочитай .audit/summary.json.
+
+            2. Найди уже заведённые задачи аудита (все состояния, поиск не по индексу, а списком):
+               gh issue list --state all --label audit --limit 200 --json number,state,title,body
+               Задача относится к находке, если в её теле есть строка `audit-key: <key находки>`.
+
+            3. Для каждой находки из findings реши:
+               - открытая задача с тем же ключом есть → новую не создавай и комментарий не пиши;
+                 исключение — оценка на той же странице изменилась на 0.1 и больше: тогда один
+                 короткий комментарий в эту задачу с новыми значениями и ссылкой на прогон;
+               - есть только закрытая задача с тем же ключом → проблема появилась снова. Узнай, каким
+                 PR её закрыли: gh issue view <номер> --json closedByPullRequestsReferences,stateReason.
+                 Создай новую задачу «Повтор: <title>» со ссылками на прежнюю задачу и исправляющий PR
+                 (если PR не найден — так и напиши) и меткой regression в дополнение к общим;
+               - задачи с этим ключом нет → создай новую задачу.
+               Новых задач за прогон — не больше 3, в порядке следования findings; остальные новые
+               находки перечисли в журнале как «отложены до следующего прогона».
+
+            4. Новая задача: gh issue create --label audit (для training: true — ещё --label training),
+               тело через --body-file из файла в .audit/. Заголовок — title находки. Тело:
+               - первой строкой для учебной находки: «**Учебная находка.** Подготовлена для проверки
+                 сценария аудита, не получена из отчёта Lighthouse и не является подтверждённым
+                 дефектом приложения.»;
+               - Проблема: что показала проверка, на каких страницах, значения (score, displayValue),
+                 описание проверки Lighthouse;
+               - Предлагаемое действие: что изменить в приложении, чтобы проверка прошла;
+               - Связь с отчётом: проверенное приложение (адрес), ссылка на прогон, имя артефакта
+                 lighthouse-report-${{ github.run_id }} и файл отчёта страницы из pages[].report;
+               - Решение о реализации принимает человек: задача — входящее обращение, дальше
+                 разбор, спецификация и тикеты;
+               - последней строкой отдельно: `audit-key: <key>`.
+
+            5. Журнал аудита — issue с меткой audit-log:
+               gh issue list --state all --label audit-log --limit 1 --json number
+               Если его нет, создай «Журнал аудита Lighthouse» с меткой audit-log и телом
+               «Вывод агента по каждому прогону воркфлоу lighthouse-audit.». Добавь в журнал ровно
+               один комментарий за прогон (--body-file):
+               - дата, приложение, ссылка на прогон, артефакт lighthouse-report-${{ github.run_id }};
+               - если status = no_data: «Нет данных: приложение не ответило, отчёт не собран. Это не
+                 подтверждает, что прежние проблемы исправлены.» Задачи в этом случае не создавай и
+                 не комментируй;
+               - иначе таблица оценок по страницам из summary.md и по каждой находке: ключ, решение
+                 (создана задача #N / уже есть открытая #N / повтор закрытой #N → новая #M / отложена),
+                 учебные находки помечены «[учебная]»;
+               - если findings пуст: «Находок нет».
+
+            6. Тот же текст, что в журнале, сохрани в .audit/agent-output.md. Итоговый ответ — кратко:
+               сколько находок, какие задачи созданы, какие пропущены как дубли, ссылка на комментарий
+               журнала.
+
+      # Вывод агента вместе с исходными данными — артефакт; постоянная копия — комментарий в журнале.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: lighthouse-agent-output-${{ github.run_id }}
+          path: .audit/agent-output.md
+          if-no-files-found: warn
+          retention-days: 90
