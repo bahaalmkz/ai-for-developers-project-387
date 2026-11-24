@@ -129,6 +129,15 @@
 5. **Работающая версия.** Задание `browser` проверило head SHA PR: артефакт `browser-check-<SHA>` с `head-sha.txt`, `result.txt`, trace и скриншотами; SHA сверен с head перед мержем.
 6. **Мерж** после зелёных обязательных проверок; коммиты по Conventional Commits, release-please обновил [release-PR #16](https://github.com/bahaalmkz/ai-for-developers-project-387/pull/16) до 0.2.0.
 
+### PR от агента: правки по общему комментарию и по строке diff
+
+[PR #38](https://github.com/bahaalmkz/ai-for-developers-project-387/pull/38) открыл сам агент (`opencode-agent`) по находке аудита [#34](https://github.com/bahaalmkz/ai-for-developers-project-387/issues/34), все коммиты в нём — от `opencode-agent[bot]`:
+
+1. [Команда `/oc` в #34](https://github.com/bahaalmkz/ai-for-developers-project-387/issues/34#issuecomment-7140808191) → PR с `<meta name="description">` в `frontend/index.html` (`227464e`). Заголовок PR поправил человек: у `gh` агента нет права открывать PR, PR открыл OpenCode и взял заголовок из ответа агента.
+2. [Общий комментарий `/oc`](https://github.com/bahaalmkz/ai-for-developers-project-387/pull/38#issuecomment-7140842266) → регрессионный тест в `App.test.tsx` (`ffbc51d`): находка превращена в тест. CI на этом коммите красный — `tsc` не знает `node:fs` (в сборке фронтенда нет типов Node).
+3. [Комментарий `/oc` к строке diff](https://github.com/bahaalmkz/ai-for-developers-project-387/pull/38#discussion_r4684803486) → тест читает файл через `../index.html?raw` (`82cdf35`), CI зелёный.
+4. Мерж после зелёных `check` и `browser` — решение человека; #34 закрыт.
+
 **Защита `main`.** Обязательные проверки `check` (`mise run check`) и `browser` (e2e на head SHA), правило действует и для администраторов (`enforce_admins`), force push и удаление ветки запрещены. Авторевью в обязательные проверки не входит: оно зависит от внешнего провайдера модели. Решение о мерже принимает человек.
 
 **Что пришлось чинить по ходу** (каждая причина видна в отчётах «нужен человек» и логах): общий дневной лимит бесплатных моделей OpenCode Zen и зависание CLI после ошибки провайдера; несовместимость Gemini 3.x с вызовами инструментов в OpenCode 1.19.6 (`model turn`, `thought_signature`); шаг composite-action, запрашивавший версию у GitHub API без токена; запрос разрешения `external_directory`, на который в CI некому ответить; `gh api`, не выводивший лог с управляющими последовательностями. Итог: агент — `opencode/claude-haiku-5-5` (оплата по факту), ревьюер — бесплатный Gemini.
