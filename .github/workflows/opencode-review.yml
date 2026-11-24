@@ -27,7 +27,7 @@ jobs:
       && github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Модель только читает файлы. Права нужны сбору контекста и публикации комментария:
+    # У модели нет инструментов, она только отвечает текстом. Права нужны сбору контекста и публикации комментария:
     # contents — checkout кода PR и REVIEW.md, issues — тексты связанных issues,
     # actions/checks/statuses — статусы CI, pull-requests — комментарий с ревью.
     # id-token не нужен: GitHub App и OIDC здесь не используются.
@@ -47,7 +47,7 @@ jobs:
           persist-credentials: false
 
       # Контекст собирается без модели: заголовок и тело PR, diff, связанные issues,
-      # статусы CI и копия критериев. Модель читает эти файлы вместе с кодом на head SHA.
+      # статусы CI и копия критериев. Следующий шаг склеивает их в запрос модели.
       - name: Gather review context
         env:
           GH_TOKEN: ${{ github.token }}
@@ -133,28 +133,37 @@ jobs:
           Не публикуй комментарии: это сделает отдельный шаг.
           PROMPT
 
-          set +e
-          timeout 720 opencode run \
-            --print-logs --log-level INFO \
-            --agent plan \
-            --model opencode/deepseek-v4.1-flash-free \
-            --format json \
-            "$(cat .review/prompt.md)" < .review/context.md > .review/review.jsonl 2> .review/review.err
-          status=$?
-          set -e
+          # Ревьюер работает на другой бесплатной модели, чем агент-разработчик (deepseek в opencode.yml):
+          # роли выполняют разные агенты. Две попытки по 5 минут: основная модель, затем запасная.
+          status=1
+          : > .review/review.md
+          for model in opencode/nemotron-3.5-lightning-free opencode/mimo-v2.6-flash-free; do
+            set +e
+            timeout 300 opencode run \
+              --print-logs --log-level INFO \
+              --agent plan \
+              --model "$model" \
+              --format json \
+              "$(cat .review/prompt.md)" < .review/context.md > .review/review.jsonl 2> .review/review.err
+            status=$?
+            set -e
+
+            # Диагностика в лог прогона: какие события и инструменты были и что в stderr
+            echo "::group::$model: события (type, tool) и stderr, код $status"
+            jq -r '[.type, (.part.tool // "")] | @tsv' .review/review.jsonl 2>/dev/null | tail -n 40 || true
+            grep -v '"permission"' .review/review.err | tail -c 6000 || true
+            echo "::endgroup::"
+
+            # Текст ревью — последнее событие type == "text" в JSON-потоке CLI.
+            jq -s -r '[.[] | select(.type == "text")] | last | .part.text? // empty' \
+              .review/review.jsonl > .review/review.md 2>/dev/null || true
+            if [ "$status" -eq 0 ] && [ -s .review/review.md ]; then
+              echo "REVIEW_MODEL=$model" >> "$GITHUB_ENV"
+              break
+            fi
+            [ "$status" -eq 0 ] && status=1
+          done
           echo "REVIEW_STATUS=$status" >> "$GITHUB_ENV"
-
-          # Диагностика в лог прогона: какие события и инструменты были и что в stderr
-          echo "::group::opencode events (type, tool)"
-          jq -r '[.type, (.part.tool // "")] | @tsv' .review/review.jsonl 2>/dev/null | tail -n 40 || true
-          echo "::endgroup::"
-          echo "::group::opencode stderr (tail)"
-          grep -v '"permission"' .review/review.err | tail -c 12000 || true
-          echo "::endgroup::"
-
-          # Текст ревью — последнее событие type == "text" в JSON-потоке CLI.
-          jq -s -r '[.[] | select(.type == "text")] | last | .part.text? // empty' \
-            .review/review.jsonl > .review/review.md 2>/dev/null || true
 
           if [ "$status" -ne 0 ]; then
             echo "Модель завершилась с кодом $status" >&2
@@ -177,6 +186,10 @@ jobs:
           {
             echo "## Авторевью для \`${HEAD_SHA}\`"
             echo
+            if [ -n "${REVIEW_MODEL:-}" ]; then
+              echo "_Ревьюер: \`${REVIEW_MODEL}\`, только чтение, критерии — \`REVIEW.md\`._"
+              echo
+            fi
             if [ "${REVIEW_STATUS:-1}" = "0" ] && [ -s .review/review.md ]; then
               cat .review/review.md
             else
