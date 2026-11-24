@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import indexHtml from '../index.html?raw'
 
 beforeEach(() => {
   // Страница записи ходит в API: отдаём пустой список
@@ -72,5 +73,17 @@ describe('Страница записи', () => {
     await userEvent.click(screen.getByRole('link', { name: 'На главную' }))
 
     expect(screen.getByRole('heading', { level: 1, name: 'Календарь звонков' })).toBeInTheDocument()
+  })
+})
+
+describe('Метаданные страницы', () => {
+  // Регрессия находки аудита lighthouse:meta-description
+  it('index.html содержит meta description с непустым content', () => {
+    const metaTags = indexHtml.match(/<meta\b[^>]*>/gi) ?? []
+    const descriptionTag = metaTags.find((tag: string) => /\bname\s*=\s*["']description["']/i.test(tag))
+
+    expect(descriptionTag).toBeDefined()
+    const content = descriptionTag?.match(/\bcontent\s*=\s*["']([^"']*)["']/i)?.[1] ?? ''
+    expect(content.trim()).not.toBe('')
   })
 })
