@@ -42,6 +42,7 @@ export function ConfirmationPage() {
           <p>
             Гость: {booking.guestName}, {booking.guestEmail}
           </p>
+          {booking.guestTopic && <p>Тема: {booking.guestTopic}</p>}
         </div>
         <Link to="/" className="back-link">
           На главную

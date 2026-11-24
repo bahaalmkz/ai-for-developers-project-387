@@ -53,7 +53,8 @@ class BookingService {
         new EventTypeRef().id(request.getEventTypeId()).title(type.title()),
         interval,
         request.getGuestName().trim(),
-        request.getGuestEmail());
+        request.getGuestEmail(),
+        BookingValidator.topicOf(request));
   }
 
   /**

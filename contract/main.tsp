@@ -45,6 +45,10 @@ model Booking {
   end: offsetDateTime;
   guestName: string;
   guestEmail: string;
+
+  @doc("Тема разговора от гостя; пустая строка — темы нет.")
+  @maxLength(200)
+  guestTopic: string;
 }
 
 @doc("Данные для записи гостя на слот.")
@@ -56,6 +60,9 @@ model CreateBookingRequest {
 
   guestName: string;
   guestEmail: string;
+
+  @doc("Необязательная тема разговора в одну строку, до 200 символов. Пробелы по краям обрезаются; пустая или из одних пробелов — темы нет.")
+  guestTopic?: string;
 }
 
 @doc("Единый формат ошибки.")

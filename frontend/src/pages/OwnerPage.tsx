@@ -165,6 +165,7 @@ export function OwnerPage() {
                     <p className="muted">
                       {booking.guestName}, {booking.guestEmail}
                     </p>
+                    {booking.guestTopic && <p>Тема: {booking.guestTopic}</p>}
                   </li>
                 ))}
               </ul>

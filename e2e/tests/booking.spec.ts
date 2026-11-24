@@ -40,7 +40,7 @@ async function fillGuest(page: Page, name: string, email: string) {
   return form
 }
 
-test('владелец создаёт тип встречи, гость записывается, повторная запись даёт конфликт', async ({
+test('владелец создаёт тип встречи, гость записывается с темой, повторная запись даёт конфликт, запись без темы работает', async ({
   page,
   browser,
 }) => {
@@ -58,27 +58,43 @@ test('владелец создаёт тип встречи, гость запи
   const latePage = await lateContext.newPage()
   const slotTime = await chooseSecondDayFirstSlot(latePage)
   const lateForm = await fillGuest(latePage, 'Опоздавший Гость', 'late@example.com')
+  await lateForm.getByLabel(/О чём хотите поговорить/).fill('Другая тема на то же время')
 
-  // Первый гость записывается на то же время и видит подтверждение
+  // Первый гость записывается на то же время с темой разговора и видит её на подтверждении
   expect(await chooseSecondDayFirstSlot(page)).toBe(slotTime)
   const form = await fillGuest(page, 'Анна Гость', 'anna@example.com')
+  await form.getByLabel(/О чём хотите поговорить/).fill('Обсудить переезд на новый тариф')
   await form.getByRole('button', { name: 'Записаться' }).click()
   await expect(page.getByRole('heading', { name: 'Запись подтверждена' })).toBeVisible()
   await expect(page.getByText(eventType.title)).toBeVisible()
   await expect(page.getByText(slotTime, { exact: false }).first()).toBeVisible()
+  await expect(page.getByText('Тема: Обсудить переезд на новый тариф')).toBeVisible()
 
-  // Встреча видна владельцу в списке предстоящих
-  await page.goto('/owner')
-  const upcoming = page.getByRole('list', { name: 'Предстоящие встречи' })
-  await expect(upcoming).toContainText(eventType.title)
-  await expect(upcoming).toContainText('Анна Гость')
-  await expect(upcoming).toContainText('anna@example.com')
-
-  // Второй гость пытается занять то же время и видит конфликт
+  // Второй гость с темой пытается занять то же время и видит конфликт
   await lateForm.getByRole('button', { name: 'Записаться' }).click()
   await expect(latePage.getByRole('alert')).toHaveText('Это время уже занято, выберите другой слот')
   // Гость снова на выборе времени того же дня: занятое время из списка пропало
   await expect(daySlots(latePage).first()).not.toHaveAttribute('aria-label', slotTime)
+
+  // Соседний сценарий: тот же гость записывается на другое время без темы — как раньше
+  await daySlots(latePage).first().click()
+  await latePage.getByRole('button', { name: 'Продолжить' }).click()
+  const plainForm = await fillGuest(latePage, 'Опоздавший Гость', 'late@example.com')
+  await plainForm.getByLabel(/О чём хотите поговорить/).fill('')
+  await plainForm.getByRole('button', { name: 'Записаться' }).click()
+  await expect(latePage.getByRole('heading', { name: 'Запись подтверждена' })).toBeVisible()
+  await expect(latePage.getByText(/Тема:/)).toHaveCount(0)
+
+  // Обе встречи видны владельцу; тема — только у той, где гость её указал
+  await page.goto('/owner')
+  const upcoming = page.getByRole('list', { name: 'Предстоящие встречи' })
+  const annaItem = upcoming.getByRole('listitem').filter({ hasText: 'Анна Гость' })
+  const lateItem = upcoming.getByRole('listitem').filter({ hasText: 'Опоздавший Гость' })
+  await expect(annaItem).toContainText(eventType.title)
+  await expect(annaItem).toContainText('anna@example.com')
+  await expect(annaItem).toContainText('Тема: Обсудить переезд на новый тариф')
+  await expect(lateItem).toContainText('late@example.com')
+  await expect(lateItem).not.toContainText('Тема:')
 
   await lateContext.close()
 })
