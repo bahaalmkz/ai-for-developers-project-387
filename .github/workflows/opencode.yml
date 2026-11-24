@@ -1,0 +1,60 @@
+name: opencode
+
+# Агент OpenCode отвечает на команды /oc и /opencode в комментариях к issue и PR.
+# Описание (события, модель, права, где смотреть результат) — в README.md, раздел «Агент в GitHub».
+
+on:
+  # Комментарий к issue или к PR целиком.
+  # Триггер нужен по назначению; запуск ограничен доверенным автором и командой в условии if задания,
+  # код PR не выполняется вне агента, а у задания нет прав на запись (только id-token для OIDC).
+  # jactionlint ignore=dangerous-triggers
+  issue_comment:
+    types: [created]
+  # Комментарий к строке diff в PR
+  pull_request_review_comment:
+    types: [created]
+
+concurrency:
+  # Один прогон на issue/PR: новая команда ждёт окончания предыдущей, а не отменяет её
+  group: opencode-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  opencode:
+    # Вызов модели только если:
+    # - в тексте есть команда /oc или /opencode;
+    # - автор — владелец или участник репозитория (не посторонний и не fork-контрибьютор);
+    # - автор не бот (агент не отвечает сам себе);
+    # - комментарий к строке diff не относится к PR из fork.
+    if: >-
+      (contains(github.event.comment.body, '/oc') || contains(github.event.comment.body, '/opencode'))
+      && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+      && github.event.comment.user.type != 'Bot'
+      && (github.event_name != 'pull_request_review_comment'
+          || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Стандартная авторизация OpenCode: токен GitHub App через OIDC.
+    # Комментарии и push агент делает правами приложения opencode-agent, а не GITHUB_TOKEN.
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # actions/checkout v4, закреплено по SHA
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      # anomalyco/opencode/github v1.19.6, закреплено по SHA.
+      # Скиллы берутся из .claude/skills/ (OpenCode читает этот каталог), правила — из AGENTS.md,
+      # настройки трекера — из docs/agents/: всё это приходит вместе с checkout.
+      - name: Run OpenCode
+        uses: anomalyco/opencode/github@f4e363c8295fa90a03dddc451882fffe8fbce357 # v1.19.6
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        with:
+          model: opencode/deepseek-v4.1-flash-free
+          mentions: /oc,/opencode
