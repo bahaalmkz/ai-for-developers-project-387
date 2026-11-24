@@ -99,7 +99,7 @@ jobs:
       # в тайм-аут (PR #18), а question/plan_exit в неинтерактивном прогоне ждали бы ответа.
       - name: Review pull request
         env:
-          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
           OPENCODE_PERMISSION: >-
             {"read":"deny","glob":"deny","grep":"deny","list":"deny","edit":"deny",
             "bash":"deny","webfetch":"deny","websearch":"deny","codesearch":"deny",
@@ -133,16 +133,26 @@ jobs:
           Не публикуй комментарии: это сделает отдельный шаг.
           PROMPT
 
-          # Ревьюер работает на другой бесплатной модели, чем агент-разработчик (deepseek в opencode.yml):
-          # роли выполняют разные агенты. Две попытки по 5 минут: основная модель, затем запасная.
+          # Попытки «модель|вариант|секунды». Ревьюер — другая модель, чем у агента-разработчика
+          # (google/gemini-flash-latest в opencode.yml): роли выполняют разные агенты. Запасная — модель разработчика:
+          # у бесплатного уровня Gemini свой лимит на каждую модель.
           status=1
           : > .review/review.md
-          for model in opencode/nemotron-3.5-lightning-free opencode/mimo-v2.6-flash-free; do
+          for attempt in "google/gemini-flash-lite-latest||240" "google/gemini-flash-latest||360"; do
+            IFS='|' read -r model variant seconds <<< "$attempt"
+            variant_args=()
+            if [ -n "$variant" ]; then
+              variant_args=(--variant "$variant")
+            fi
             set +e
-            timeout 300 opencode run \
+            # Агент build, а не plan: в режиме plan OpenCode добавляет служебные сообщения, и Gemini
+            # отклоняет запрос («Requests ending with a model turn are not supported»). Безопасность
+            # не меняется: все инструменты модели запрещены через OPENCODE_PERMISSION выше.
+            timeout "$seconds" opencode run \
               --print-logs --log-level INFO \
-              --agent plan \
+              --agent build \
               --model "$model" \
+              "${variant_args[@]}" \
               --format json \
               "$(cat .review/prompt.md)" < .review/context.md > .review/review.jsonl 2> .review/review.err &
             pid=$!
