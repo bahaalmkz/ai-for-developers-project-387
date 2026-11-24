@@ -38,6 +38,12 @@
 
 **Ограничения и остановка.** Тайм-аут задания 20 минут; один прогон на issue/PR одновременно (`concurrency`, следующая команда ждёт). Остановить текущий прогон — Actions → прогон → **Cancel workflow run**; отключить будущие — Actions → opencode → **Disable workflow**; при утечке — отозвать ключ в OpenCode Console.
 
+### Проверка работы
+
+Команда в issue, например `/oc прочитай настройки из docs/agents/ и AGENTS.md. Назови: новый трекер задач (репозиторий), доступные тебе скиллы (есть ли среди них to-spec, to-tickets и implement-spec) и команду проверок проекта.` Агент отвечает комментарием от `opencode-agent[bot]`: трекер — Issues репозитория `bahaalmkz/ai-for-developers-project-387` (через `gh`), скиллы `to-spec`, `to-tickets`, `implement-spec` доступны (помечены `disable-model-invocation`, вызываются по имени командой), проверки — `mise run check`.
+
+Ответ и прогон: [это issue](https://github.com/bahaalmkz/ai-for-developers-project-387/issues/3) и [Actions → opencode](https://github.com/bahaalmkz/ai-for-developers-project-387/actions/workflows/opencode.yml).
+
 ## Запуск для проверки
 
 Через Docker (нужен только Docker):
