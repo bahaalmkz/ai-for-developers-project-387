@@ -2,7 +2,7 @@ name: opencode
 
 # Агент OpenCode отвечает на команды /oc и /opencode в комментариях к issue и PR.
 # Описание (события, модель, права, где смотреть результат) — в README.md, раздел «Агент в GitHub».
-# На один PR — не больше 3 запусков агента; считает их задание budget до вызова модели.
+# На один PR — не больше 4 запусков агента; считает их задание budget до вызова модели.
 
 on:
   # Комментарий к issue или к PR целиком.
@@ -85,7 +85,7 @@ jobs:
           done
 
           allowed="false"
-          if [ "$used" -lt 3 ]; then
+          if [ "$used" -lt 4 ]; then
             allowed="true"
           fi
           printf 'used=%s\n' "$used" >> "$GITHUB_OUTPUT"
@@ -145,6 +145,9 @@ jobs:
         run: opencode github run
         env:
           MODEL: opencode/claude-haiku-5-5
+          # В CI некому ответить на запрос разрешения: «ask» вешает агента до тайм-аута (PR #21 —
+          # external_directory после cd ..). Запросы, которые в CI некому подтвердить, — сразу отказ.
+          OPENCODE_PERMISSION: '{"external_directory":"deny","doom_loop":"deny","question":"deny"}'
           MENTIONS: /oc,/opencode
           # Модель агента — платная OpenCode Zen claude-haiku-5-5, оплата по факту (ключ OPENCODE_API_KEY);
           # служебная модель для заголовков сессий — Gemini Flash Lite (opencode.json)
@@ -198,7 +201,7 @@ jobs:
           if [ "$ALLOWED" != "true" ]; then
             # Модель не вызывалась: бюджет исчерпан
             reason="limit_exhausted"
-            detail="Бюджет запусков агента на этот PR исчерпан (${USED}/3), модель не вызывалась."
+            detail="Бюджет запусков агента на этот PR исчерпан (${USED}/4), модель не вызывалась."
           else
             # Задание agent текущего прогона (включая предыдущие попытки этого же прогона)
             job_id=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs?filter=all" \
