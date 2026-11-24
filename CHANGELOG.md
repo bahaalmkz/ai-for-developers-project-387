@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.2.0](https://github.com/bahaalmkz/ai-for-developers-project-387/compare/v0.1.0...v0.2.0) (2026-11-24)
+
+
+### Features
+
+* тема разговора в записи гостя и в списке встреч владельца ([#9](https://github.com/bahaalmkz/ai-for-developers-project-387/issues/9), [#10](https://github.com/bahaalmkz/ai-for-developers-project-387/issues/10)) ([f8dfe9e](https://github.com/bahaalmkz/ai-for-developers-project-387/commit/f8dfe9ed755c4f1ecf74d399cc93e8b7617f38d5))
+* тема разговора в записи гостя и в списке встреч владельца ([#9](https://github.com/bahaalmkz/ai-for-developers-project-387/issues/9), [#10](https://github.com/bahaalmkz/ai-for-developers-project-387/issues/10)) ([254eb9f](https://github.com/bahaalmkz/ai-for-developers-project-387/commit/254eb9ffda94ac06683803da9abdc876d7180515))
+
+
+### Bug Fixes
+
+* meta description на страницах приложения ([#34](https://github.com/bahaalmkz/ai-for-developers-project-387/issues/34)) ([7f20a47](https://github.com/bahaalmkz/ai-for-developers-project-387/commit/7f20a47bad7c76480133f9f63e050de852adf6a0))
+* smoke.sh не падает от SIGPIPE в grep | head при pipefail ([1e8b513](https://github.com/bahaalmkz/ai-for-developers-project-387/commit/1e8b51346b06769e934214687d5ffab329719a8e))
+* smoke.sh не падает от SIGPIPE в grep | head при pipefail ([c748cda](https://github.com/bahaalmkz/ai-for-developers-project-387/commit/c748cda46269ce002f607b6f245afeb50c335f40))
+* добавить meta description на страницы ([#34](https://github.com/bahaalmkz/ai-for-developers-project-387/issues/34)) ([227464e](https://github.com/bahaalmkz/ai-for-developers-project-387/commit/227464ebc3e1b6dd8ff7b2702398244409a0a6f9))
+* ограничение длины темы в форме гостя ([#9](https://github.com/bahaalmkz/ai-for-developers-project-387/issues/9)) ([9f121f8](https://github.com/bahaalmkz/ai-for-developers-project-387/commit/9f121f864955ae2a7fea664ce06bfcf30ce10468))
+* тема разговора без переводов строк ([#9](https://github.com/bahaalmkz/ai-for-developers-project-387/issues/9)) ([73d3dda](https://github.com/bahaalmkz/ai-for-developers-project-387/commit/73d3dda6c2dcb04c335ec5f692de1a139debca1a))
+* убрать node-импорты из теста meta description ([#34](https://github.com/bahaalmkz/ai-for-developers-project-387/issues/34)) ([82cdf35](https://github.com/bahaalmkz/ai-for-developers-project-387/commit/82cdf35a59e56349700680cc5e72cb25320e8bf0))
+
 ## 0.1.0 (2026-11-24)
 
 
