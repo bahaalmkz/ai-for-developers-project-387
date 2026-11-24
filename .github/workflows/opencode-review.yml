@@ -77,12 +77,19 @@ jobs:
             } >> .review/issues.md
           done < .review/issue-numbers.txt
 
-      # Установка CLI закреплённой версии. Каталог бинарника добавляется в PATH
-      # для следующего шага, чтобы вызов был просто opencode.
+      # Установка CLI закреплённой версии: бинарник из GitHub Releases с проверкой sha256
+      # (не скрипт curl | bash). Каталог бинарника добавляется в PATH для следующего шага.
       - name: Install OpenCode CLI
+        env:
+          OPENCODE_VERSION: 1.19.6
+          OPENCODE_SHA256: 47734e08968b30cc22a0bffb6d9feeed76ad4aa743213a12122040392d09a057
         run: |
           set -euo pipefail
-          curl -fsSL https://opencode.ai/install | bash -s -- --version 1.19.6
+          mkdir -p "$HOME/.opencode/bin"
+          curl -fsSL -o /tmp/opencode.tar.gz \
+            "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-x64.tar.gz"
+          echo "${OPENCODE_SHA256}  /tmp/opencode.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/opencode.tar.gz -C "$HOME/.opencode/bin"
           echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
 
       # Ревью обычным CLI: агент plan только читает, а OPENCODE_PERMISSION запрещает
