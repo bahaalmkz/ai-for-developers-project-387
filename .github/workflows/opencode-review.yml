@@ -97,7 +97,8 @@ jobs:
       - name: Review pull request
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-          OPENCODE_PERMISSION: '{"edit":"deny","bash":"deny","webfetch":"deny"}'
+          # question и plan_exit ждут ответа человека — в неинтерактивном прогоне это зависание
+          OPENCODE_PERMISSION: '{"edit":"deny","bash":"deny","webfetch":"deny","question":"deny","plan_exit":"deny"}'
         run: |
           set -euo pipefail
           cat > .review/prompt.md <<'PROMPT'
@@ -125,14 +126,22 @@ jobs:
           PROMPT
 
           set +e
-          timeout 600 opencode run \
+          timeout 720 opencode run \
             --agent plan \
             --model opencode/deepseek-v4.1-flash-free \
             --format json \
-            "$(cat .review/prompt.md)" > .review/review.jsonl 2> .review/review.err
+            "$(cat .review/prompt.md)" < /dev/null > .review/review.jsonl 2> .review/review.err
           status=$?
           set -e
           echo "REVIEW_STATUS=$status" >> "$GITHUB_ENV"
+
+          # Диагностика в лог прогона: какие события и инструменты были и что в stderr
+          echo "::group::opencode events (type, tool)"
+          jq -r '[.type, (.part.tool // "")] | @tsv' .review/review.jsonl 2>/dev/null | tail -n 40 || true
+          echo "::endgroup::"
+          echo "::group::opencode stderr (tail)"
+          tail -c 4000 .review/review.err || true
+          echo "::endgroup::"
 
           # Текст ревью — последнее событие type == "text" в JSON-потоке CLI.
           jq -s -r '[.[] | select(.type == "text")] | last | .part.text? // empty' \
