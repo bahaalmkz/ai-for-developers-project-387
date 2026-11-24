@@ -38,13 +38,17 @@ request POST /api/event-types "{\"id\":\"$RUN_ID-30\",\"title\":\"Проверк
 expect 201 "создание типа встречи на 30 минут"
 
 request GET "/api/event-types/$RUN_ID-60/slots"; expect 200 "свободные слоты"
-START=$(grep -o '"start":"[^"]*"' <<<"$BODY" | head -1 | cut -d'"' -f4)
+# Первое совпадение берём регулярным выражением bash, а не конвейером grep | head:
+# при pipefail grep получает SIGPIPE от закрывшегося head, и на длинном списке слотов скрипт падает
+START=""
+[[ $BODY =~ \"start\":\"([^\"]*)\" ]] && START=${BASH_REMATCH[1]}
 [ -n "$START" ] || fail "нет свободных слотов: $BODY"
 echo "     первый свободный слот: $START"
 
 request POST /api/bookings "{\"eventTypeId\":\"$RUN_ID-60\",\"start\":\"$START\",\"guestName\":\"Smoke\",\"guestEmail\":\"smoke@example.com\"}"
 expect 201 "запись гостя на 60 минут"
-BOOKING_ID=$(grep -o '"id":"[^"]*"' <<<"$BODY" | head -1 | cut -d'"' -f4)
+BOOKING_ID=""
+[[ $BODY =~ \"id\":\"([^\"]*)\" ]] && BOOKING_ID=${BASH_REMATCH[1]}
 
 # Через 30 минут после начала: частичное наложение встречей другого типа
 OVERLAP=$(date -u -d "@$(( $(date -d "$START" +%s) + 1800 ))" +%Y-%m-%dT%H:%M:%SZ)
