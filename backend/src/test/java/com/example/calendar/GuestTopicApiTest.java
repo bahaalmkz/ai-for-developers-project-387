@@ -179,6 +179,21 @@ class GuestTopicApiTest {
     assertThat(bookingCount()).isZero();
   }
 
+  /** Регрессия: тема с переводом строки ломала строку «Тема: …» у владельца. */
+  @Test
+  void topicWithLineBreakGivesFieldErrorAndNoBooking() throws IOException, InterruptedException {
+    HttpResponse<String> lf = book(START, "строка1\nстрока2");
+    HttpResponse<String> cr = book(START, "строка1\rстрока2");
+
+    assertThat(lf.statusCode()).isEqualTo(400);
+    assertThat(lf.body())
+        .contains("\"code\":\"validation_error\"")
+        .contains("\"guestTopic\":\"Тема — одна строка, без переводов строк\"");
+    assertThat(cr.statusCode()).isEqualTo(400);
+    assertThat(cr.body()).contains("\"guestTopic\":");
+    assertThat(bookingCount()).isZero();
+  }
+
   @Test
   void blankTopicIsNotAnErrorAndIsStoredEmpty() throws IOException, InterruptedException {
     HttpResponse<String> response = book(START, "    ");

@@ -49,8 +49,12 @@ final class BookingValidator {
       errors.put("guestEmail", "Введите email в формате name@example.com");
     }
 
-    // Тема необязательна: null и одни пробелы — темы нет. Длина — после обрезки пробелов по краям
-    if (topicOf(request).length() > MAX_TOPIC_LENGTH) {
+    // Тема необязательна: null и одни пробелы — темы нет. Однострочность проверяется по исходному
+    // значению, длина — после обрезки пробелов по краям
+    String rawTopic = request.getGuestTopic();
+    if (rawTopic != null && (rawTopic.indexOf('\n') >= 0 || rawTopic.indexOf('\r') >= 0)) {
+      errors.put("guestTopic", "Тема — одна строка, без переводов строк");
+    } else if (topicOf(request).length() > MAX_TOPIC_LENGTH) {
       errors.put("guestTopic", "Тема не длиннее " + MAX_TOPIC_LENGTH + " символов");
     }
 
