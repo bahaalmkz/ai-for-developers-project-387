@@ -135,6 +135,7 @@ jobs:
 
           set +e
           timeout 720 opencode run \
+            --print-logs --log-level INFO \
             --agent plan \
             --model opencode/deepseek-v4.1-flash-free \
             --format json \
@@ -148,7 +149,7 @@ jobs:
           jq -r '[.type, (.part.tool // "")] | @tsv' .review/review.jsonl 2>/dev/null | tail -n 40 || true
           echo "::endgroup::"
           echo "::group::opencode stderr (tail)"
-          tail -c 4000 .review/review.err || true
+          grep -v '"permission"' .review/review.err | tail -c 12000 || true
           echo "::endgroup::"
 
           # Текст ревью — последнее событие type == "text" в JSON-потоке CLI.
