@@ -37,9 +37,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # Стандартная авторизация OpenCode: токен GitHub App через OIDC.
-    # Комментарии и push агент делает правами приложения opencode-agent, а не GITHUB_TOKEN.
+    # Комментарии и push агент делает правами приложения opencode-agent.
+    # GITHUB_TOKEN с issues: write нужен только команде gh внутри агента:
+    # скиллы to-spec, to-tickets и triage создают issues, ставят метки и связи.
     permissions:
       contents: read
+      issues: write
       id-token: write
     steps:
       # actions/checkout v4, закреплено по SHA
@@ -55,6 +58,8 @@ jobs:
         uses: anomalyco/opencode/github@f4e363c8295fa90a03dddc451882fffe8fbce357 # v1.19.6
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          # Без него gh в шагах агента не авторизован
+          GH_TOKEN: ${{ github.token }}
         with:
           model: opencode/deepseek-v4.1-flash-free
           mentions: /oc,/opencode
