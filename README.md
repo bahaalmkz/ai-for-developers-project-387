@@ -49,6 +49,24 @@
 
 Ответ и прогон: [это issue](https://github.com/bahaalmkz/ai-for-developers-project-387/issues/3) и [Actions → opencode](https://github.com/bahaalmkz/ai-for-developers-project-387/actions/workflows/opencode.yml).
 
+**Автотриаж** проверен на двух issues. Обычное обращение [#13](https://github.com/bahaalmkz/ai-for-developers-project-387/issues/13) разобрано без команды: метки `enhancement` и `needs-info`, комментарий с вопросами, [прогон](https://github.com/bahaalmkz/ai-for-developers-project-387/actions/runs/45415874086). Issue [#14](https://github.com/bahaalmkz/ai-for-developers-project-387/issues/14) с меткой `ready-for-agent` пропущено: [прогон](https://github.com/bahaalmkz/ai-for-developers-project-387/actions/runs/45415881266) со статусом `skipped`.
+
+Воркфлоу (`.github/workflows/`) агент написать может, а запушить — нет: GitHub не даёт GitHub App менять воркфлоу без права `workflows`, у opencode-agent его нет. Такие изменения переносит в PR человек (так сделан [#12](https://github.com/bahaalmkz/ai-for-developers-project-387/pull/12) из ответа агента в [#11](https://github.com/bahaalmkz/ai-for-developers-project-387/issues/11)).
+
+## От обращения к спецификации
+
+Доработки начинаются с обращения в Issues, сформулированного словами пользователя, и проходят тот же путь, что в первом проекте, но в GitHub: разбор (`triage`) → вопросы и ответы → `to-spec` → `to-tickets` → согласование человеком → `implement-spec`.
+
+Пример — тема разговора в записи гостя:
+
+1. Обращение: [#6 «Хочу заранее знать, о чём гость хочет поговорить»](https://github.com/bahaalmkz/ai-for-developers-project-387/issues/6).
+2. [Разбор агента](https://github.com/bahaalmkz/ai-for-developers-project-387/issues/6#issuecomment-7133330978) (что уже умеет приложение, вопросы) и [ответы](https://github.com/bahaalmkz/ai-for-developers-project-387/issues/6#issuecomment-7133369863).
+3. Спецификация (`to-spec`): [#8](https://github.com/bahaalmkz/ai-for-developers-project-387/issues/8) — основной, негативный и соседний сценарии, изменение API через TypeSpec.
+4. Тикеты (`to-tickets`): [#9](https://github.com/bahaalmkz/ai-for-developers-project-387/issues/9) и [#10](https://github.com/bahaalmkz/ai-for-developers-project-387/issues/10) (под-issues #8, #10 заблокирован #9).
+5. [Согласование](https://github.com/bahaalmkz/ai-for-developers-project-387/issues/6#issuecomment-7133838426) спецификации и тикетов в исходном обращении; PR реализации ссылается на этот комментарий.
+
+Метки разбора — `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix` (`docs/agents/triage-labels.md`). Спецификации и тикеты от скиллов получают `ready-for-agent` и автотриажем не разбираются.
+
 ## Запуск для проверки
 
 Через Docker (нужен только Docker):
