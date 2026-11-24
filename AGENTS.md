@@ -55,3 +55,10 @@
 - `docs/agents/domain.md` — документы предметной области: один `GLOSSARY.md` и ADR в `docs/adr/` (single-context).
 
 Скиллы `/to-spec`, `/to-tickets`, `/implement-spec` и `/setup-matt-pocock-skills` помечены `disable-model-invocation`: агент их сам не запускает и в списке доступных не показывает. Их вызывает пользователь командой со слэшем в чате. Остальные скиллы (`domain-modeling`, `tdd`, `code-review`, `pr` и др.) агент может подобрать сам по описанию или по просьбе. Перед реализацией читайте спецификацию, связанные тикеты и их зависимости.
+
+### Агент в GitHub Actions (OpenCode)
+
+- `.github/workflows/opencode.yml` запускает OpenCode по комментарию `/oc` или `/opencode` доверенного участника в issue или PR. Описание — README.md, раздел «Агент в GitHub».
+- OpenCode читает скиллы из `.claude/skills/`, правила из этого файла и настройки трекера из `docs/agents/`. Скилл вызывается текстом: `/oc запусти скилл to-spec по обсуждению этого issue`. Пометка `disable-model-invocation` в OpenCode только скрывает скилл из списка; по имени он загружается.
+- На раннере нет mise-демонов и локальной БД. Проверки в GitHub делает `ci.yml` (`mise run check`) на каждый push, в том числе в ветки агента.
+- Новый воркфлоу описывается в той же таблице README.md (событие, модель, назначение, где результат).

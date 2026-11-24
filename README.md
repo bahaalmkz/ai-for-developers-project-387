@@ -20,6 +20,24 @@
 
 Номера задач в истории коммитов и в `CHANGELOG.md` (`#14`–`#22`) относятся к первому репозиторию.
 
+## Агент в GitHub
+
+В репозитории работает агент [OpenCode](https://opencode.ai/docs/github/) через GitHub App [opencode-agent](https://github.com/apps/opencode-agent). Локально скиллы запускал Claude Code; в GitHub тот же набор скиллов и правил выполняет OpenCode на раннере Actions. Отличие только в агенте: OpenCode читает те же `.claude/skills/`, `AGENTS.md` и `docs/agents/`, а скилл вызывается текстом команды, а не слэш-командой чата.
+
+| Воркфлоу | Событие | Модель | Назначение | Где результат |
+| --- | --- | --- | --- | --- |
+| [`opencode.yml`](.github/workflows/opencode.yml) | `issue_comment` и `pull_request_review_comment`, `types: [created]` | `opencode/deepseek-v4.1-flash-free` (бесплатная модель OpenCode) | ответ на команду в issue/PR, запуск скиллов, правки PR | комментарий от `opencode-agent[bot]` в том же issue/PR; лог прогона — [Actions → opencode](https://github.com/bahaalmkz/ai-for-developers-project-387/actions/workflows/opencode.yml) |
+
+**Команды** (`mentions: /oc,/opencode`, набор по умолчанию, записан явно): комментарий, содержащий `/oc` или `/opencode`, например `/oc explain this issue` или `/oc запусти скилл to-spec по обсуждению этого issue`. Вопросы и решения остаются в обсуждении issue, следующая сессия читает их перед работой.
+
+**Кто может вызвать.** Только владелец и участники репозитория (`author_association`: `OWNER`, `MEMBER`, `COLLABORATOR`). Комментарии ботов пропускаются, чтобы агент не отвечал сам себе. Редактирование комментария агента повторно не запускает (`types: [created]`). Комментарии к строкам diff в PR из fork агента не запускают; `pull_request_target` не используется, поэтому код чужого PR не получает ключ модели.
+
+**Права.** Стандартная авторизация OpenCode: заданию выдано только `contents: read` и `id-token: write`, у `actions/checkout` — `persist-credentials: false`. Отвечает и пушит агент правами приложения opencode-agent.
+
+**Ключ модели.** Секрет `OPENCODE_API_KEY` (Settings → Secrets and variables → Actions), ключ из [OpenCode Console](https://opencode.ai/docs/zen/). Модель бесплатная, но ключ нужен: по нему провайдер узнаёт аккаунт и считает лимиты. В файлах ключа нет.
+
+**Ограничения и остановка.** Тайм-аут задания 20 минут; один прогон на issue/PR одновременно (`concurrency`, следующая команда ждёт). Остановить текущий прогон — Actions → прогон → **Cancel workflow run**; отключить будущие — Actions → opencode → **Disable workflow**; при утечке — отозвать ключ в OpenCode Console.
+
 ## Запуск для проверки
 
 Через Docker (нужен только Docker):
