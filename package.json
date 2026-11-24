@@ -1,0 +1,9 @@
+{
+  "name": "ai-for-developers-project-387",
+  "private": true,
+  "description": "Проверка формата коммитов (Conventional Commits) для git-хука commit-msg через hk",
+  "devDependencies": {
+    "@commitlint/cli": "21.2.4",
+    "@commitlint/config-conventional": "21.2.4"
+  }
+}

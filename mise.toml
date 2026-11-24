@@ -1,0 +1,72 @@
+[settings]
+experimental = true
+
+[tools]
+java = "temurin-21"
+maven = "3.10.1"
+node = "26.13.1"
+hk = "2.13.0"
+pitchfork = "2.36.0"
+jactionlint = "2.6.0"
+
+# Фоновые процессы разработки: запуск, остановка и статус через pitchfork.
+# mvn и npm одинаково работают в Windows и Linux, поэтому без отдельных команд для ОС.
+[daemons.backend]
+run = "mvn spring-boot:run -Dspring-boot.run.profiles=dev"
+dir = "backend"
+
+[daemons.frontend]
+run = "npm run dev"
+dir = "frontend"
+
+[tasks.contract]
+description = "Скомпилировать контракт TypeSpec в openapi.yaml"
+dir = "contract"
+run = "npm ci && npx tsp compile ."
+
+[tasks.generate]
+description = "Сгенерировать клиентский SDK фронтенда из OpenAPI"
+depends = ["contract"]
+dir = "frontend"
+# openapi-generator-cli ищет openapitools.json по $PWD, а mise оставляет в нём корень репозитория
+env = { PWD = "{{config_root}}/frontend" }
+run = "npm ci && npm run generate:api"
+
+[tasks.lint]
+description = "Линтеры: форматирование Java, oxlint для фронтенда и workflow-файлы GitHub Actions"
+depends = ["generate"]
+run = [
+  "cd backend && mvn -B -q spotless:check",
+  "cd frontend && npm run lint",
+  "jactionlint",
+]
+
+[tasks.typecheck]
+description = "Проверка типов фронтенда и сборка"
+depends = ["generate"]
+dir = "frontend"
+run = "npm run build"
+
+[tasks.test]
+description = "Тесты бэкенда (включая дымовой тест запуска) и фронтенда"
+depends = ["generate"]
+run = [
+  "cd backend && mvn -B -q test",
+  "cd frontend && npm test",
+]
+
+[tasks.e2e]
+description = "Браузерный сценарий Playwright на настоящем бэкенде и чистой БД"
+depends = ["generate"]
+# Оба запускают Maven в backend/target: параллельно они мешают друг другу
+wait_for = ["test"]
+dir = "e2e"
+run = [
+  "npm ci",
+  "npx playwright install chromium",
+  "npx playwright test",
+]
+
+[tasks.check]
+description = "Все текущие проверки: локально и в GitHub Actions"
+depends = ["lint", "typecheck", "test", "e2e"]

@@ -1,0 +1,108 @@
+/* Базовые токены и типографика. Стили страниц — в App.css */
+:root {
+  --bg: #f5f7fb;
+  --surface: #ffffff;
+  --surface-muted: #eef2f7;
+  --text: #0f172a;
+  --text-muted: #64748b;
+  --border: #e2e8f0;
+  --accent: #f97316;
+  --accent-hover: #ea580c;
+  --accent-soft: #ffedd5;
+  --accent-text: #ffffff;
+  --hero-glow-1: rgba(96, 140, 255, 0.28);
+  --hero-glow-2: rgba(255, 176, 120, 0.3);
+  --success: #1f8a5b;
+  --success-soft: #e3f5ec;
+  --danger: #c2332f;
+  --danger-soft: #fdecec;
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 4px 16px rgba(16, 24, 40, 0.06);
+  --radius: 14px;
+  --radius-sm: 10px;
+
+  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  color-scheme: light;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111318;
+    --surface: #1a1d24;
+    --surface-muted: #232733;
+    --text: #e9ecf2;
+    --text-muted: #9aa3b2;
+    --border: #2c313d;
+    --accent: #fb8a3c;
+    --accent-hover: #fd9f5e;
+    --accent-soft: #3a2519;
+    --accent-text: #1a1d24;
+    --hero-glow-1: rgba(70, 110, 230, 0.22);
+    --hero-glow-2: rgba(240, 130, 60, 0.16);
+    --success: #4cc38a;
+    --success-soft: #16302a;
+    --danger: #ff7a72;
+    --danger-soft: #3a1d1d;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.35);
+    color-scheme: dark;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+h1 {
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+h2 {
+  font-size: 20px;
+  font-weight: 650;
+}
+
+h3 {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--accent);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
