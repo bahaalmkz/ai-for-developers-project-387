@@ -99,7 +99,7 @@ jobs:
       # в тайм-аут (PR #18), а question/plan_exit в неинтерактивном прогоне ждали бы ответа.
       - name: Review pull request
         env:
-          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
           OPENCODE_PERMISSION: >-
             {"read":"deny","glob":"deny","grep":"deny","list":"deny","edit":"deny",
             "bash":"deny","webfetch":"deny","websearch":"deny","codesearch":"deny",
@@ -133,13 +133,12 @@ jobs:
           Не публикуй комментарии: это сделает отдельный шаг.
           PROMPT
 
-          # Попытки «модель|вариант|секунды». Основная — другая бесплатная модель, чем у агента-разработчика
-          # (deepseek в opencode.yml): роли выполняют разные агенты. У бесплатных моделей свой лимит
-          # запросов на каждую (429 RateLimit.Free), поэтому запасная — deepseek с низким уровнем
-          # рассуждений (--variant low), иначе ответ на большой контекст не укладывается во время.
+          # Попытки «модель|вариант|секунды». Ревьюер — другая модель, чем у агента-разработчика
+          # (google/gemini-flash-latest в opencode.yml): роли выполняют разные агенты. Запасная — модель разработчика:
+          # у бесплатного уровня Gemini свой лимит на каждую модель.
           status=1
           : > .review/review.md
-          for attempt in "opencode/big-pickle||240" "opencode/deepseek-v4.1-flash-free|low|360"; do
+          for attempt in "google/gemini-flash-lite-latest||240" "google/gemini-flash-latest||360"; do
             IFS='|' read -r model variant seconds <<< "$attempt"
             variant_args=()
             if [ -n "$variant" ]; then
