@@ -144,9 +144,24 @@ jobs:
               --agent plan \
               --model "$model" \
               --format json \
-              "$(cat .review/prompt.md)" < .review/context.md > .review/review.jsonl 2> .review/review.err
+              "$(cat .review/prompt.md)" < .review/context.md > .review/review.jsonl 2> .review/review.err &
+            pid=$!
+            # CLI после ошибки провайдера (например, «Free usage limit reached») не завершается,
+            # а ждёт до тайм-аута. Ловим ошибку в логе и останавливаем сразу.
+            while kill -0 "$pid" 2>/dev/null; do
+              if grep -q 'level=ERROR.*stream error' .review/review.err; then
+                kill "$pid" 2>/dev/null
+                break
+              fi
+              sleep 3
+            done
+            wait "$pid"
             status=$?
             set -e
+            provider_error=$(grep -o 'error.error="[^"]*' .review/review.err | head -n1 | cut -c14-300 || true)
+            if [ -n "$provider_error" ]; then
+              echo "REVIEW_ERROR=$model: $provider_error" >> "$GITHUB_ENV"
+            fi
 
             # Диагностика в лог прогона: какие события и инструменты были и что в stderr
             echo "::group::$model: события (type, tool) и stderr, код $status"
@@ -194,6 +209,10 @@ jobs:
               cat .review/review.md
             else
               echo "Ревью не получено (код ${REVIEW_STATUS:-unknown}). Лог: ${RUN_URL}"
+              if [ -n "${REVIEW_ERROR:-}" ]; then
+                echo
+                echo "Причина \`infra\` — ошибка провайдера модели: ${REVIEW_ERROR}"
+              fi
             fi
           } > .review/comment.md
           gh pr comment "$PR_NUMBER" --body-file .review/comment.md
