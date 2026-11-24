@@ -134,12 +134,12 @@ jobs:
           PROMPT
 
           # Попытки «модель|вариант|секунды». Ревьюер — другая модель, чем у агента-разработчика
-          # (google/gemini-flash-lite-latest в opencode.yml): роли выполняют разные агенты. Ревью — один запрос на версию PR,
+          # (gemini/gemini-flash-lite-latest в opencode.yml): роли выполняют разные агенты. Ревью — один запрос на версию PR,
           # поэтому ревьюеру хватает сильной модели с малым дневным лимитом (Gemini Flash: 5 RPM, 20 RPD);
           # запасная — модель разработчика (Flash Lite: 15 RPM, 500 RPD).
           status=1
           : > .review/review.md
-          for attempt in "google/gemini-flash-latest||240" "google/gemini-flash-lite-latest||300"; do
+          for attempt in "gemini/gemini-flash-latest||240" "gemini/gemini-flash-lite-latest||300"; do
             IFS='|' read -r model variant seconds <<< "$attempt"
             variant_args=()
             if [ -n "$variant" ]; then
@@ -195,7 +195,7 @@ jobs:
           # диалог, и Gemini отклоняет запрос («Requests ending with a model turn are not supported»).
           # Ревьюеру инструменты не нужны, поэтому одного запроса достаточно.
           if [ "$status" -ne 0 ]; then
-            model=google/gemini-flash-lite-latest
+            model=gemini/gemini-flash-lite-latest
             jq -n --rawfile prompt .review/prompt.md --rawfile context .review/context.md \
               '{contents: [{role: "user", parts: [{text: ($prompt + "\n\n" + $context)}]}]}' \
               > .review/gemini-request.json

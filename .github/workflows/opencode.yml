@@ -133,7 +133,7 @@ jobs:
           # Без него gh в шагах агента не авторизован
           GH_TOKEN: ${{ github.token }}
         with:
-          model: google/gemini-flash-lite-latest
+          model: gemini/gemini-flash-lite-latest
           mentions: /oc,/opencode
 
   # Если модель не вызывалась из-за бюджета или задание агента не завершилось успехом,
