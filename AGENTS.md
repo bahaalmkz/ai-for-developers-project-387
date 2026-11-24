@@ -59,6 +59,7 @@
 ### Агент в GitHub Actions (OpenCode)
 
 - `.github/workflows/opencode.yml` запускает OpenCode по комментарию `/oc` или `/opencode` доверенного участника в issue или PR. Описание — README.md, раздел «Агент в GitHub».
+- `.github/workflows/opencode-triage.yml` автоматически разбирает каждое новое обращение (`issues`, `types: [opened]`) по скиллу `triage`: ставит метки категории и состояния, при нехватке данных — `needs-info` и вопросы. Только для доверенных авторов и не для ботов; issues с меткой `ready-for-agent` пропускаются. Описание — README.md, раздел «Агент в GitHub».
 - OpenCode читает скиллы из `.claude/skills/`, правила из этого файла и настройки трекера из `docs/agents/`. Скилл вызывается текстом: `/oc запусти скилл to-spec по обсуждению этого issue`. Пометка `disable-model-invocation` в OpenCode только скрывает скилл из списка; по имени он загружается.
 - На раннере нет mise-демонов и локальной БД. Проверки в GitHub делает `ci.yml` (`mise run check`) на каждый push, в том числе в ветки агента.
 - Новый воркфлоу описывается в той же таблице README.md (событие, модель, назначение, где результат).

@@ -27,6 +27,7 @@
 | Воркфлоу | Событие | Модель | Назначение | Где результат |
 | --- | --- | --- | --- | --- |
 | [`opencode.yml`](.github/workflows/opencode.yml) | `issue_comment` и `pull_request_review_comment`, `types: [created]` | `opencode/deepseek-v4.1-flash-free` (бесплатная модель OpenCode) | ответ на команду в issue/PR, запуск скиллов, правки PR | комментарий от `opencode-agent[bot]` в том же issue/PR; лог прогона — [Actions → opencode](https://github.com/bahaalmkz/ai-for-developers-project-387/actions/workflows/opencode.yml) |
+| [`opencode-triage.yml`](.github/workflows/opencode-triage.yml) | `issues`, `types: [opened]` | `opencode/deepseek-v4.1-flash-free` (бесплатная модель OpenCode) | предварительный разбор нового обращения по скиллу `triage`: категория, состояние, метки, вопросы автору | метки и комментарий от `opencode-agent[bot]` в том же issue; лог прогона — [Actions → opencode-triage](https://github.com/bahaalmkz/ai-for-developers-project-387/actions/workflows/opencode-triage.yml) |
 
 **Команды** (`mentions: /oc,/opencode`, набор по умолчанию, записан явно): комментарий, содержащий `/oc` или `/opencode`, например `/oc explain this issue` или `/oc запусти скилл to-spec по обсуждению этого issue`. Вопросы и решения остаются в обсуждении issue, следующая сессия читает их перед работой.
 
@@ -39,6 +40,8 @@
 **Ключ модели.** Секрет `OPENCODE_API_KEY` (Settings → Secrets and variables → Actions), ключ из [OpenCode Console](https://opencode.ai/docs/zen/). Модель бесплатная, но ключ нужен: по нему провайдер узнаёт аккаунт и считает лимиты. В файлах ключа нет.
 
 **Ограничения и остановка.** Тайм-аут задания 20 минут; один прогон на issue/PR одновременно (`concurrency`, следующая команда ждёт). Остановить текущий прогон — Actions → прогон → **Cancel workflow run**; отключить будущие — Actions → opencode → **Disable workflow**; при утечке — отозвать ключ в OpenCode Console.
+
+**Автотриаж.** `opencode-triage.yml` разбирает каждое новое обращение (`issues`, `types: [opened]`) без команды: инструкция передаётся во входе `prompt`, а ответ action публикует сам. Запускается только для доверенных авторов (`author_association`: `OWNER`, `MEMBER`, `COLLABORATOR`) и не для ботов. Issues с меткой `ready-for-agent` — тикеты и спецификации от `to-spec`/`to-tickets` — пропускаются, чтобы готовое не разбирали повторно. Агент проверяет, что уже умеет приложение, ставит одну метку категории (`bug`/`enhancement`) и одну метку состояния из `docs/agents/triage-labels.md`; если данных не хватает — `needs-info` и комментарий по шаблону Triage Notes с конкретными вопросами. Код не меняет и issue не закрывает. Тайм-аут задания 15 минут; одновременно идёт один разбор на весь репозиторий (`concurrency: opencode-triage`). Если обращений сразу несколько, GitHub держит в очереди только одно ожидающее, более раннее ожидающее отменяется — его разбирают вручную командой `/oc`. Метки ставит `gh` внутри агента (`GH_TOKEN`, `issues: write`), комментарий публикует action от `opencode-agent[bot]`.
 
 ### Проверка работы
 
