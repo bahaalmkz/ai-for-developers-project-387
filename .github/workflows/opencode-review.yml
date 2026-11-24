@@ -134,11 +134,12 @@ jobs:
           PROMPT
 
           # Попытки «модель|вариант|секунды». Ревьюер — другая модель, чем у агента-разработчика
-          # (google/gemini-flash-latest в opencode.yml): роли выполняют разные агенты. Запасная — модель разработчика:
-          # у бесплатного уровня Gemini свой лимит на каждую модель.
+          # (google/gemini-flash-lite-latest в opencode.yml): роли выполняют разные агенты. Ревью — один запрос на версию PR,
+          # поэтому ревьюеру хватает сильной модели с малым дневным лимитом (Gemini Flash: 5 RPM, 20 RPD);
+          # запасная — модель разработчика (Flash Lite: 15 RPM, 500 RPD).
           status=1
           : > .review/review.md
-          for attempt in "google/gemini-flash-lite-latest||240" "google/gemini-flash-latest||360"; do
+          for attempt in "google/gemini-flash-latest||240" "google/gemini-flash-lite-latest||300"; do
             IFS='|' read -r model variant seconds <<< "$attempt"
             variant_args=()
             if [ -n "$variant" ]; then
@@ -188,6 +189,36 @@ jobs:
             fi
             [ "$status" -eq 0 ] && status=1
           done
+
+          # Запасная попытка: тот же запрос одним вызовом Gemini API, без цикла агента OpenCode.
+          # На большом контексте Gemini иногда заканчивает первый шаг без текста, OpenCode продолжает
+          # диалог, и Gemini отклоняет запрос («Requests ending with a model turn are not supported»).
+          # Ревьюеру инструменты не нужны, поэтому одного запроса достаточно.
+          if [ "$status" -ne 0 ]; then
+            model=google/gemini-flash-lite-latest
+            jq -n --rawfile prompt .review/prompt.md --rawfile context .review/context.md \
+              '{contents: [{role: "user", parts: [{text: ($prompt + "\n\n" + $context)}]}]}' \
+              > .review/gemini-request.json
+            set +e
+            curl -sS --max-time 180 \
+              -H "Content-Type: application/json" \
+              -H "x-goog-api-key: ${GOOGLE_GENERATIVE_AI_API_KEY}" \
+              -d @.review/gemini-request.json \
+              "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent" \
+              > .review/gemini-response.json
+            curl_status=$?
+            set -e
+            jq -r '[.candidates[0].content.parts[]?.text // empty] | join("")' \
+              .review/gemini-response.json > .review/review.md 2>/dev/null || true
+            if [ "$curl_status" -eq 0 ] && [ -s .review/review.md ]; then
+              status=0
+              echo "REVIEW_MODEL=$model (Gemini API, один запрос)" >> "$GITHUB_ENV"
+            else
+              echo "::group::Gemini API: ответ без текста"
+              jq -c '.error // .promptFeedback // .candidates[0].finishReason' .review/gemini-response.json 2>/dev/null || true
+              echo "::endgroup::"
+            fi
+          fi
           echo "REVIEW_STATUS=$status" >> "$GITHUB_ENV"
 
           if [ "$status" -ne 0 ]; then
