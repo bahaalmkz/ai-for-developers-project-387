@@ -188,9 +188,12 @@ jobs:
               --jq '.jobs[] | select(.name == "agent") | .id' | head -n1 || true)
             log=""
             if [ -n "$job_id" ]; then
-              # Лог завершённого задания GitHub выкладывает не сразу: несколько попыток
+              # Лог завершённого задания GitHub выкладывает не сразу: несколько попыток.
+              # curl, а не gh api: gh отказывается выводить лог с управляющими последовательностями
+              # терминала (цвета вывода OpenCode), и лог оказывался пустым.
               for _ in 1 2 3 4 5 6; do
-                log=$(gh api "repos/$REPO/actions/jobs/$job_id/logs" 2>/dev/null || true)
+                log=$(curl -sSL -H "Authorization: Bearer ${GH_TOKEN}" \
+                  "${GITHUB_API_URL}/repos/$REPO/actions/jobs/$job_id/logs" 2>/dev/null || true)
                 [ -n "$log" ] && break
                 sleep 10
               done
