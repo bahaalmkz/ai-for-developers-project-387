@@ -134,11 +134,12 @@ jobs:
           PROMPT
 
           # Попытки «модель|вариант|секунды». Ревьюер — другая модель, чем у агента-разработчика
-          # (google/gemini-2.5-flash в opencode.yml): роли выполняют разные агенты. Запасная — модель разработчика:
-          # у бесплатного уровня Gemini свой лимит на каждую модель.
+          # (google/gemini-flash-lite-latest в opencode.yml): роли выполняют разные агенты. Ревью — один запрос на версию PR,
+          # поэтому ревьюеру хватает сильной модели с малым дневным лимитом (Gemini Flash: 5 RPM, 20 RPD);
+          # запасная — модель разработчика (Flash Lite: 15 RPM, 500 RPD).
           status=1
           : > .review/review.md
-          for attempt in "google/gemini-flash-lite-latest||240" "google/gemini-2.5-flash||360"; do
+          for attempt in "google/gemini-flash-latest||240" "google/gemini-flash-lite-latest||300"; do
             IFS='|' read -r model variant seconds <<< "$attempt"
             variant_args=()
             if [ -n "$variant" ]; then
