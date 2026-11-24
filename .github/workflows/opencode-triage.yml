@@ -53,12 +53,14 @@ jobs:
       - name: Run OpenCode
         uses: anomalyco/opencode/github@f4e363c8295fa90a03dddc451882fffe8fbce357 # v1.19.6
         env:
-          # Ключ Gemini API (Google AI Studio, бесплатный уровень)
+          # Модель агента — бесплатная OpenCode Zen (ключ OPENCODE_API_KEY); служебная модель для
+          # заголовков сессий — Gemini Flash Lite (opencode.json), чтобы не тратить на неё лимит Zen
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
           # Без него gh в шагах агента не авторизован
           GH_TOKEN: ${{ github.token }}
         with:
-          model: gemini/gemini-2.5-flash-lite
+          model: opencode/deepseek-v4.1-flash-free
           prompt: |
             Разбери новое обращение #${{ github.event.issue.number }} по скиллу triage
             (.claude/skills/triage/SKILL.md), но только предварительно: код не меняй и issue не закрывай.
