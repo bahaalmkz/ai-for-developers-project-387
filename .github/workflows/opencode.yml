@@ -2,17 +2,21 @@ name: opencode
 
 # Агент OpenCode отвечает на команды /oc и /opencode в комментариях к issue и PR.
 # Описание (события, модель, права, где смотреть результат) — в README.md, раздел «Агент в GitHub».
+# На один PR — не больше 3 запусков агента; считает их задание budget до вызова модели.
 
 on:
   # Комментарий к issue или к PR целиком.
   # Триггер нужен по назначению; запуск ограничен доверенным автором и командой в условии if задания,
-  # код PR не выполняется вне агента, а у задания нет прав на запись (только id-token для OIDC).
+  # код PR не выполняется вне агента; права заданий перечислены ниже, у каждого только свои.
   # jactionlint ignore=dangerous-triggers
   issue_comment:
     types: [created]
   # Комментарий к строке diff в PR
   pull_request_review_comment:
     types: [created]
+
+# По этому названию прогоны одного PR находятся в истории Actions и считается бюджет
+run-name: "opencode #${{ github.event.issue.number || github.event.pull_request.number }}"
 
 concurrency:
   # Один прогон на issue/PR: новая команда ждёт окончания предыдущей, а не отменяет её
@@ -22,18 +26,75 @@ concurrency:
 permissions: {}
 
 jobs:
-  opencode:
-    # Вызов модели только если:
-    # - в тексте есть команда /oc или /opencode;
-    # - автор — владелец или участник репозитория (не посторонний и не fork-контрибьютор);
-    # - автор не бот (агент не отвечает сам себе);
-    # - комментарий к строке diff не относится к PR из fork.
+  # Считает, сколько запусков агента уже было на этом PR, и решает, можно ли вызывать модель.
+  # Состояние — история Actions: токен агента не может её переписать, текст комментариев на бюджет не влияет.
+  budget:
+    # То же условие, что у задания agent: считаем только допущенные команды.
     if: >-
       (contains(github.event.comment.body, '/oc') || contains(github.event.comment.body, '/opencode'))
       && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
       && github.event.comment.user.type != 'Bot'
       && (github.event_name != 'pull_request_review_comment'
           || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    outputs:
+      used: ${{ steps.count.outputs.used }}
+      allowed: ${{ steps.count.outputs.allowed }}
+    steps:
+      - name: Count agent runs for this PR
+        id: count
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_PR_URL: ${{ github.event.issue.pull_request.url }}
+          NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          # Для обычных issues (не PR) предела нет
+          is_pr="false"
+          if [ "$EVENT_NAME" = "pull_request_review_comment" ] || [ -n "${ISSUE_PR_URL:-}" ]; then
+            is_pr="true"
+          fi
+          if [ "$is_pr" != "true" ]; then
+            printf 'used=0\n' >> "$GITHUB_OUTPUT"
+            printf 'allowed=true\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Прогоны этого воркфлоу с тем же display_title относятся к одному PR
+          title="opencode #${NUMBER}"
+          used=0
+          runs=$(gh api "repos/$REPO/actions/workflows/opencode.yml/runs?per_page=100" --paginate \
+            --jq ".workflow_runs[] | select(.display_title == \"$title\") | .id")
+          for run_id in $runs; do
+            jobs=$(gh api "repos/$REPO/actions/runs/$run_id/jobs?filter=all" --paginate \
+              --jq '.jobs[] | select(.name == "agent") | [.status, (.conclusion // "")] | @tsv')
+            while IFS=$'\t' read -r status conclusion; do
+              [ -z "$status" ] && continue
+              # Задание стартовало: conclusion не skipped и не null, либо ещё выполняется.
+              # Отмена, тайм-аут и Re-run тоже расходуют попытку.
+              if [ "$status" = "in_progress" ] || { [ "$conclusion" != "skipped" ] && [ "$conclusion" != "" ]; }; then
+                used=$((used + 1))
+              fi
+            done <<< "$jobs"
+          done
+
+          allowed="false"
+          if [ "$used" -lt 3 ]; then
+            allowed="true"
+          fi
+          printf 'used=%s\n' "$used" >> "$GITHUB_OUTPUT"
+          printf 'allowed=%s\n' "$allowed" >> "$GITHUB_OUTPUT"
+
+  # Текущее задание OpenCode: вызывает модель, только если бюджет не исчерпан.
+  agent:
+    needs: budget
+    if: needs.budget.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # Стандартная авторизация OpenCode: токен GitHub App через OIDC.
@@ -45,6 +106,16 @@ jobs:
       issues: write
       id-token: write
     steps:
+      # Без ключа action падает невнятной ошибкой — проверяем заранее
+      - name: Check model key
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: |
+          if [ -z "${OPENCODE_API_KEY:-}" ]; then
+            echo "::error::Секрет OPENCODE_API_KEY не задан (Settings → Secrets and variables → Actions). Без ключа модель не запустится."
+            exit 1
+          fi
+
       # actions/checkout v4, закреплено по SHA
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -63,3 +134,86 @@ jobs:
         with:
           model: opencode/deepseek-v4.1-flash-free
           mentions: /oc,/opencode
+
+  # Если модель не вызывалась из-за бюджета или задание агента не завершилось успехом,
+  # зовём человека: причина, последний head SHA PR и ссылка на прогон.
+  report:
+    needs: [budget, agent]
+    if: >-
+      always()
+      && needs.budget.result == 'success'
+      && (needs.budget.outputs.allowed != 'true' || needs.agent.result != 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Report that a human is needed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_PR_URL: ${{ github.event.issue.pull_request.url }}
+          NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ALLOWED: ${{ needs.budget.outputs.allowed }}
+          USED: ${{ needs.budget.outputs.used }}
+        run: |
+          set -euo pipefail
+
+          is_pr="false"
+          if [ "$EVENT_NAME" = "pull_request_review_comment" ] || [ -n "${ISSUE_PR_URL:-}" ]; then
+            is_pr="true"
+          fi
+
+          head_sha=""
+          if [ "$is_pr" = "true" ]; then
+            head_sha=$(gh pr view "$NUMBER" --repo "$REPO" --json headRefOid --jq .headRefOid || true)
+          fi
+
+          reason=""
+          detail=""
+          log_url="$RUN_URL"
+          if [ "$ALLOWED" != "true" ]; then
+            # Модель не вызывалась: бюджет исчерпан
+            reason="limit_exhausted"
+            detail="Бюджет запусков агента на этот PR исчерпан (${USED}/3), модель не вызывалась."
+          else
+            # Задание agent текущего прогона (включая предыдущие попытки этого же прогона)
+            job_id=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs?filter=all" \
+              --jq '.jobs[] | select(.name == "agent") | .id' | head -n1 || true)
+            log=""
+            if [ -n "$job_id" ]; then
+              log=$(gh api "repos/$REPO/actions/jobs/$job_id/logs" 2>/dev/null || true)
+              log_url="$RUN_URL/job/$job_id"
+            fi
+            if grep -q "has exceeded the maximum execution time" <<< "$log"; then
+              reason="timeout"
+              detail="Задание агента превысило максимальное время выполнения."
+            elif ! grep -q "opencode session" <<< "$log"; then
+              # Сессия агента не стартовала: сбой подготовки или нет ключа
+              reason="infra"
+              detail="Сбой подготовки или не задан ключ модели: сессия агента не стартовала."
+            else
+              # Неопределённую причину не угадываем — даём ссылку на лог
+              reason="agent_failed"
+              detail="Прочая ошибка агента, точную причину смотрите в логе задания."
+            fi
+          fi
+
+          comment_file="${RUNNER_TEMP:-/tmp}/opencode-comment.md"
+          {
+            printf '### Нужен человек: запуск агента\n\n'
+            printf "**Причина:** \`%s\`. %s\n\n" "$reason" "$detail"
+            if [ -n "$head_sha" ]; then
+              printf "**Head SHA PR:** \`%s\`\n\n" "$head_sha"
+            fi
+            printf '**Прогон:** %s\n' "$RUN_URL"
+            if [ "$reason" != "limit_exhausted" ] && [ "$log_url" != "$RUN_URL" ]; then
+              printf '**Лог задания:** %s\n' "$log_url"
+            fi
+          } > "$comment_file"
+          gh issue comment "$NUMBER" --repo "$REPO" --body-file "$comment_file"

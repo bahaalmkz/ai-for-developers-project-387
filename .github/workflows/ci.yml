@@ -2,6 +2,7 @@ name: ci
 
 on:
   push:
+  pull_request:
 
 permissions:
   contents: read
@@ -12,6 +13,9 @@ concurrency:
 
 jobs:
   check:
+    # Полный набор проверок — на каждый push, в том числе в ветки PR;
+    # на событии pull_request идёт только задание browser
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -40,6 +44,8 @@ jobs:
 
   # Образ из Dockerfile собирается, стартует по PORT и проходит сквозной сценарий (scripts/smoke.sh)
   docker:
+    # Как и check, только на push: на PR не дублируем
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -67,3 +73,62 @@ jobs:
       - name: Container logs
         if: failure()
         run: docker logs calendar
+
+  # Браузерный сценарий на точном head SHA PR (не на merge-коммите): артефакт с SHA и результатом
+  browser:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Секретов нет: только чтение репозитория
+    permissions:
+      contents: read
+    steps:
+      # actions/checkout v4, закреплено по SHA.
+      # ref — head SHA PR, чтобы проверялся именно присланный коммит.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Record head SHA
+        run: |
+          mkdir -p e2e/artifacts
+          sha=$(git rev-parse HEAD)
+          printf '%s\n' "$sha" > e2e/artifacts/head-sha.txt
+          printf "Head SHA: \`%s\`\n" "$sha" >> "$GITHUB_STEP_SUMMARY"
+
+      # jdx/mise-action v2, закреплено по SHA
+      - name: Install mise and tools from mise.toml
+        uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2
+
+      # Системные библиотеки для Chromium (сам браузер ставит mise run e2e)
+      - name: Install Playwright system dependencies
+        working-directory: e2e
+        run: npm ci && npx playwright install-deps chromium
+
+      # Код выхода и полный вывод — в e2e/artifacts/result.txt, чтобы они попали в артефакт
+      - name: Run browser scenario
+        env:
+          E2E_TRACE: "on"
+        run: |
+          mkdir -p e2e/artifacts
+          set +e
+          set -o pipefail
+          mise run e2e 2>&1 | tee e2e/artifacts/e2e.log
+          status=${PIPESTATUS[0]}
+          {
+            printf 'exit_code=%s\n\n' "$status"
+            cat e2e/artifacts/e2e.log
+          } > e2e/artifacts/result.txt
+          exit "$status"
+
+      # actions/upload-artifact v4.6.2, закреплено по SHA. Сохраняем всегда: артефакт нужен и при падении
+      - name: Upload browser check artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: browser-check-${{ github.event.pull_request.head.sha }}
+          path: |
+            e2e/artifacts/
+            e2e/test-results/
+          if-no-files-found: warn
