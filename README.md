@@ -80,6 +80,21 @@
 
 Метки разбора — `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix` (`docs/agents/triage-labels.md`). Спецификации и тикеты от скиллов получают `ready-for-agent` и автотриажем не разбираются.
 
+## От issue к pull request и ревью
+
+Полный цикл «issue → PR → ревью → правки → мерж» на примере темы разговора — [PR #21](https://github.com/bahaalmkz/ai-for-developers-project-387/pull/21):
+
+1. **Реализация по спецификации #8 и тикетам #9, #10.** PR заполнен по шаблону `.github/pull_request_template.md`: связанные issues и ссылка на согласование, проверки с прогонами и head SHA, риск с обоснованием глубины проверки, откат с отдельным разбором данных. Реализацию написал локальный агент (Claude Code, `implement-spec`): в это время у агента в Actions закончился бесплатный лимит OpenCode Zen.
+2. **Проверка обнаруживает отсутствие нового поведения.** Коммит только с тестами — [CI красный](https://github.com/bahaalmkz/ai-for-developers-project-387/actions/runs/45433632414) (8 тестов `GuestTopicApiTest` падают на поведении), после реализации — [зелёный](https://github.com/bahaalmkz/ai-for-developers-project-387/actions/runs/45434647091).
+3. **Авторевью** (`opencode-review`, Gemini) — на каждую версию PR. Ошибочное замечание к `schema.sql` разобрано и [отклонено с объяснением](https://github.com/bahaalmkz/ai-for-developers-project-387/pull/21#issuecomment-7139723311).
+4. **Замечания человека с `/oc`.** Общий комментарий (тема с переводами строк) — агент исправил в той же ветке: `fix: тема разговора без переводов строк (#9)` с регрессионным тестом и правилом в `REVIEW.md` (защита от повторения: ограничения полей проверяются на сервере). Комментарий к строке (`maxLength`) — [отказ `limit_exhausted`](https://github.com/bahaalmkz/ai-for-developers-project-387/actions/runs/45451595584) без вызова модели (бюджет 4/4), правку завершил человек: `fix: ограничение длины темы в форме гостя (#9)`.
+5. **Работающая версия.** Задание `browser` проверило head SHA PR: артефакт `browser-check-<SHA>` с `head-sha.txt`, `result.txt`, trace и скриншотами; SHA сверен с head перед мержем.
+6. **Мерж** после зелёных обязательных проверок; коммиты по Conventional Commits, release-please обновил [release-PR #16](https://github.com/bahaalmkz/ai-for-developers-project-387/pull/16) до 0.2.0.
+
+**Защита `main`.** Обязательные проверки `check` (`mise run check`) и `browser` (e2e на head SHA), правило действует и для администраторов (`enforce_admins`), force push и удаление ветки запрещены. Авторевью в обязательные проверки не входит: оно зависит от внешнего провайдера модели. Решение о мерже принимает человек.
+
+**Что пришлось чинить по ходу** (каждая причина видна в отчётах «нужен человек» и логах): общий дневной лимит бесплатных моделей OpenCode Zen и зависание CLI после ошибки провайдера; несовместимость Gemini 3.x с вызовами инструментов в OpenCode 1.19.6 (`model turn`, `thought_signature`); шаг composite-action, запрашивавший версию у GitHub API без токена; запрос разрешения `external_directory`, на который в CI некому ответить; `gh api`, не выводивший лог с управляющими последовательностями. Итог: агент — `opencode/claude-haiku-5-5` (оплата по факту), ревьюер — бесплатный Gemini.
+
 ## Запуск для проверки
 
 Через Docker (нужен только Docker):
