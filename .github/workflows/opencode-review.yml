@@ -92,37 +92,45 @@ jobs:
           tar -xzf /tmp/opencode.tar.gz -C "$HOME/.opencode/bin"
           echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
 
-      # Ревью обычным CLI: агент plan только читает, а OPENCODE_PERMISSION запрещает
-      # правку файлов, bash и webfetch. Модель не публикует комментарии и не меняет код.
+      # Ревью обычным CLI за один шаг: весь контекст собран в один файл и передан через stdin
+      # (CLI добавляет его к тексту запроса), все инструменты модели запрещены. Модель только
+      # отвечает текстом: не читает другие файлы, не меняет код, не запускает команды.
+      # Бесплатная модель тратит 30–60 с на шаг — с чтением файлов ревью не укладывалось
+      # в тайм-аут (PR #18), а question/plan_exit в неинтерактивном прогоне ждали бы ответа.
       - name: Review pull request
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-          # question и plan_exit ждут ответа человека — в неинтерактивном прогоне это зависание
-          OPENCODE_PERMISSION: '{"edit":"deny","bash":"deny","webfetch":"deny","question":"deny","plan_exit":"deny"}'
+          OPENCODE_PERMISSION: >-
+            {"read":"deny","glob":"deny","grep":"deny","list":"deny","edit":"deny",
+            "bash":"deny","webfetch":"deny","websearch":"deny","codesearch":"deny",
+            "task":"deny","todowrite":"deny","skill":"deny","question":"deny","plan_exit":"deny"}
         run: |
           set -euo pipefail
-          cat > .review/prompt.md <<'PROMPT'
-          Ты — независимый ревьюер pull request. Проверь diff этого PR по критериям проекта.
+          # Один файл контекста: критерии, PR, связанные issues, статусы CI, diff
+          {
+            echo "# REVIEW.md — критерии ревью"; echo; cat .review/REVIEW.md; echo
+            echo "# PR (заголовок, тело, head SHA)"; echo; jq -r '"\(.title)\n\nhead SHA: \(.headRefOid)\n\n\(.body // "")"' .review/pr.json; echo
+            echo "# Связанные issues (спецификация, тикеты, согласование)"; echo; cat .review/issues.md; echo
+            echo "# Статусы CI"; echo; cat .review/checks.txt; echo
+            echo "# Diff PR"; echo; echo '```diff'; cat .review/pr.diff; echo '```'
+          } > .review/context.md
 
-          Что читать:
-          - .review/REVIEW.md — критерии ревью; каждое замечание должно им соответствовать.
-          - .review/pr.json — заголовок, тело PR и head SHA.
-          - .review/pr.diff — изменения PR.
-          - .review/issues.md — тексты issues, на которые ссылается тело PR (спецификация, тикеты, согласование).
-          - .review/checks.txt — статусы CI.
-          - Файлы репозитория на head SHA — по мере необходимости, только чтение.
+          cat > .review/prompt.md <<'PROMPT'
+          Ты — независимый ревьюер pull request. Весь контекст — ниже в этом сообщении:
+          критерии REVIEW.md, описание PR, связанные issues, статусы CI и diff. Инструменты
+          недоступны: отвечай сразу, одним сообщением, только по этому контексту.
 
           Что проверить:
           1. Дефекты относительно REVIEW.md: занятость слотов и 409, время и окно записи, контракт API, формат ошибок, совместимость данных H2, тесты, объём относительно спецификации и тикетов, шаблон PR и Conventional Commits.
-          2. Соответствие diff спецификации и тикетам из .review/issues.md; если спецификация или согласование недоступны, отметь это.
-          3. Учти результаты CI из .review/checks.txt, но не повторяй вывод линтера.
+          2. Соответствие diff спецификации и тикетам из связанных issues; если спецификация или согласование недоступны, отметь это.
+          3. Учти статусы CI, но не повторяй вывод линтера.
 
           Формат ответа — только текст ревью, без вступлений и служебных фраз:
           - для каждого подтверждённого дефекта: файл и строка, условие ошибки, последствие;
           - если подтверждённых дефектов нет, так и напиши;
           - если объём выходит за согласованную спецификацию или согласование недоступно — отметь отдельно.
 
-          Не меняй файлы и не запускай команды. Не публикуй комментарии: это сделает отдельный шаг.
+          Не публикуй комментарии: это сделает отдельный шаг.
           PROMPT
 
           set +e
@@ -130,7 +138,7 @@ jobs:
             --agent plan \
             --model opencode/deepseek-v4.1-flash-free \
             --format json \
-            "$(cat .review/prompt.md)" < /dev/null > .review/review.jsonl 2> .review/review.err
+            "$(cat .review/prompt.md)" < .review/context.md > .review/review.jsonl 2> .review/review.err
           status=$?
           set -e
           echo "REVIEW_STATUS=$status" >> "$GITHUB_ENV"
