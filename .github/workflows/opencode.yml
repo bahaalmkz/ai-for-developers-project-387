@@ -133,7 +133,7 @@ jobs:
           # Без него gh в шагах агента не авторизован
           GH_TOKEN: ${{ github.token }}
         with:
-          model: gemini/gemini-flash-lite-latest
+          model: gemini/gemini-2.5-flash-lite
           mentions: /oc,/opencode
 
   # Если модель не вызывалась из-за бюджета или задание агента не завершилось успехом,
@@ -188,12 +188,25 @@ jobs:
               --jq '.jobs[] | select(.name == "agent") | .id' | head -n1 || true)
             log=""
             if [ -n "$job_id" ]; then
-              log=$(gh api "repos/$REPO/actions/jobs/$job_id/logs" 2>/dev/null || true)
+              # Лог завершённого задания GitHub выкладывает не сразу: несколько попыток
+              for _ in 1 2 3 4 5 6; do
+                log=$(gh api "repos/$REPO/actions/jobs/$job_id/logs" 2>/dev/null || true)
+                [ -n "$log" ] && break
+                sleep 10
+              done
               log_url="$RUN_URL/job/$job_id"
             fi
-            if grep -q "has exceeded the maximum execution time" <<< "$log"; then
+            if [ -z "$log" ]; then
+              # Без лога причину не угадываем
+              reason="agent_failed"
+              detail="Лог задания агента недоступен, причину смотрите по ссылке."
+            elif grep -q "has exceeded the maximum execution time" <<< "$log"; then
               reason="timeout"
               detail="Задание агента превысило максимальное время выполнения."
+            elif grep -qE "high demand|Service Unavailable|Free usage limit|RESOURCE_EXHAUSTED|statusCode: (429|503)" <<< "$log"; then
+              # Сессия стартовала, но провайдер модели отказал: перегрузка или лимит
+              reason="infra"
+              detail="Провайдер модели отказал (перегрузка или лимит запросов)."
             elif ! grep -q "opencode session" <<< "$log"; then
               # Сессия агента не стартовала: сбой подготовки или нет ключа
               reason="infra"

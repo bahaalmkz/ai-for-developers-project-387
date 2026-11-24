@@ -58,7 +58,7 @@ jobs:
           # Без него gh в шагах агента не авторизован
           GH_TOKEN: ${{ github.token }}
         with:
-          model: gemini/gemini-flash-lite-latest
+          model: gemini/gemini-2.5-flash-lite
           prompt: |
             Разбери новое обращение #${{ github.event.issue.number }} по скиллу triage
             (.claude/skills/triage/SKILL.md), но только предварительно: код не меняй и issue не закрывай.
