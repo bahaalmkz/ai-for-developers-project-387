@@ -16,7 +16,9 @@ export default defineConfig({
   reporter: [['list']],
   use: {
     baseURL: `http://localhost:${frontendPort}`,
-    trace: 'retain-on-failure',
+    // E2E_TRACE=on в браузерной проверке PR: трассировка и скриншоты для любого исхода
+    trace: process.env.E2E_TRACE === 'on' ? 'on' : 'retain-on-failure',
+    screenshot: process.env.E2E_TRACE === 'on' ? 'on' : 'only-on-failure',
   },
   webServer: [
     {
