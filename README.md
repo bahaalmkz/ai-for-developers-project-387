@@ -32,7 +32,9 @@
 
 **Кто может вызвать.** Только владелец и участники репозитория (`author_association`: `OWNER`, `MEMBER`, `COLLABORATOR`). Комментарии ботов пропускаются, чтобы агент не отвечал сам себе. Редактирование комментария агента повторно не запускает (`types: [created]`). Комментарии к строкам diff в PR из fork агента не запускают; `pull_request_target` не используется, поэтому код чужого PR не получает ключ модели.
 
-**Права.** Стандартная авторизация OpenCode: заданию выдано только `contents: read` и `id-token: write`, у `actions/checkout` — `persist-credentials: false`. Отвечает и пушит агент правами приложения opencode-agent.
+**Права.** Стандартная авторизация OpenCode: заданию выдано `contents: read`, `issues: write` и `id-token: write`, у `actions/checkout` — `persist-credentials: false`. Отвечает и пушит агент правами приложения opencode-agent. Команде `gh` внутри агента передан `GITHUB_TOKEN` (переменная `GH_TOKEN`) с правом `issues: write`: скиллы `to-spec`, `to-tickets` и `triage` создают issues, ставят метки и связи. Такие issues создаёт `github-actions[bot]`, и другие воркфлоу они не запускают.
+
+**Служебная модель.** `opencode.json` задаёт `small_model` — ту же бесплатную модель. Без этого OpenCode генерирует заголовок сессии платной моделью по умолчанию и получает ошибку `Insufficient balance`.
 
 **Ключ модели.** Секрет `OPENCODE_API_KEY` (Settings → Secrets and variables → Actions), ключ из [OpenCode Console](https://opencode.ai/docs/zen/). Модель бесплатная, но ключ нужен: по нему провайдер узнаёт аккаунт и считает лимиты. В файлах ключа нет.
 
