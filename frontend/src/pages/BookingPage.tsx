@@ -67,7 +67,7 @@ function Host() {
   )
 }
 
-const emptyGuest = { guestName: '', guestEmail: '' }
+const emptyGuest = { guestName: '', guestEmail: '', guestTopic: '' }
 
 export function BookingPage() {
   const navigate = useNavigate()
@@ -149,6 +149,8 @@ export function BookingPage() {
     setSubmitting(true)
     setFieldErrors({})
     setFormError(null)
+    // Незаполненная тема в запрос не попадает: запись без темы отправляет те же данные, что раньше
+    const guestTopic = guest.guestTopic.trim()
     try {
       const booking = await bookingsApi.createBooking({
         createBookingRequest: {
@@ -156,6 +158,7 @@ export function BookingPage() {
           start: selectedSlot.start,
           guestName: guest.guestName,
           guestEmail: guest.guestEmail,
+          ...(guestTopic ? { guestTopic } : {}),
         },
       })
       navigate('/book/confirmation', { state: { booking } })
@@ -183,9 +186,11 @@ export function BookingPage() {
     }
   }
 
-  function guestField(name: keyof typeof emptyGuest, label: string, type: string) {
+  function guestField(name: keyof typeof emptyGuest, label: string, type: string, hint?: string) {
     const error = fieldErrors[name]
     const errorId = `${name}-error`
+    const hintId = `${name}-hint`
+    const describedBy = [hint && hintId, error && errorId].filter(Boolean).join(' ')
     return (
       <div className="field">
         <label>
@@ -195,9 +200,14 @@ export function BookingPage() {
             value={guest[name]}
             onChange={(e) => setGuest((current) => ({ ...current, [name]: e.target.value }))}
             aria-invalid={error ? true : undefined}
-            aria-describedby={error ? errorId : undefined}
+            aria-describedby={describedBy || undefined}
           />
         </label>
+        {hint && (
+          <span id={hintId} className="muted">
+            {hint}
+          </span>
+        )}
         {error && (
           <span id={errorId} className="field-error">
             {error}
@@ -449,6 +459,12 @@ export function BookingPage() {
             <p className="muted">Регистрация не нужна: достаточно имени и email.</p>
             {guestField('guestName', 'Имя', 'text')}
             {guestField('guestEmail', 'Email', 'email')}
+            {guestField(
+              'guestTopic',
+              'О чём хотите поговорить? (необязательно)',
+              'text',
+              'Тему увидит владелец календаря — не пишите конфиденциальное.',
+            )}
             {(startError || formError) && (
               <p role="alert" className="alert">
                 {startError ?? formError}

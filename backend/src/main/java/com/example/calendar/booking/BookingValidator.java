@@ -20,10 +20,18 @@ final class BookingValidator {
 
   private static final Pattern EMAIL = Pattern.compile("[^@\\s]+@[^@\\s.]+(\\.[^@\\s.]+)+");
 
+  static final int MAX_TOPIC_LENGTH = 200;
+
   private final SlotSchedule schedule;
 
   BookingValidator(SlotSchedule schedule) {
     this.schedule = schedule;
+  }
+
+  /** Тема разговора в сохраняемом виде: без пробелов по краям, пустая строка — темы нет. */
+  static String topicOf(CreateBookingRequest request) {
+    String topic = request.getGuestTopic();
+    return topic == null ? "" : topic.strip();
   }
 
   void validate(CreateBookingRequest request, Duration duration, Instant now) {
@@ -39,6 +47,11 @@ final class BookingValidator {
     String email = request.getGuestEmail();
     if (email == null || email.length() > 254 || !EMAIL.matcher(email).matches()) {
       errors.put("guestEmail", "Введите email в формате name@example.com");
+    }
+
+    // Тема необязательна: null и одни пробелы — темы нет. Длина — после обрезки пробелов по краям
+    if (topicOf(request).length() > MAX_TOPIC_LENGTH) {
+      errors.put("guestTopic", "Тема не длиннее " + MAX_TOPIC_LENGTH + " символов");
     }
 
     String startError = startError(request, duration, now);

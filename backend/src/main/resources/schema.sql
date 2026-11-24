@@ -11,8 +11,13 @@ CREATE TABLE IF NOT EXISTS bookings (
   start_at TIMESTAMP WITH TIME ZONE NOT NULL,
   end_at TIMESTAMP WITH TIME ZONE NOT NULL,
   guest_name VARCHAR(100) NOT NULL,
-  guest_email VARCHAR(254) NOT NULL
+  guest_email VARCHAR(254) NOT NULL,
+  guest_topic VARCHAR(200) NOT NULL DEFAULT ''
 );
+
+-- Тема разговора (спецификация #8) для файловой БД, созданной до неё: повторный запуск ничего не
+-- меняет, старые встречи получают пустую тему
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS guest_topic VARCHAR(200) NOT NULL DEFAULT '';
 
 -- Единственная строка-замок: сериализует проверку занятости и вставку встречи (BookingService)
 CREATE TABLE IF NOT EXISTS calendar_lock (
