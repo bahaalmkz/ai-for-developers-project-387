@@ -75,6 +75,18 @@ describe('Тема разговора в записи гостя', () => {
     expect(topic).toHaveAccessibleDescription(/не пишите конфиденциальное/i)
   })
 
+  it('не даёт ввести в поле темы больше 200 символов', async () => {
+    stubBookingApi(() => json({}, 500))
+    const user = await openGuestForm()
+    const topic = screen.getByLabelText(/О чём хотите поговорить\?/)
+
+    await user.click(topic)
+    await user.paste('т'.repeat(205))
+
+    expect(topic).toHaveAttribute('maxLength', '200')
+    expect(topic).toHaveValue('т'.repeat(200))
+  })
+
   it('отправляет обрезанную тему и показывает её на подтверждении', async () => {
     const fetchMock = stubBookingApi(() => json(bookingResponse('Обсудить тариф'), 201))
     const user = await openGuestForm()

@@ -186,7 +186,13 @@ export function BookingPage() {
     }
   }
 
-  function guestField(name: keyof typeof emptyGuest, label: string, type: string, hint?: string) {
+  function guestField(
+    name: keyof typeof emptyGuest,
+    label: string,
+    type: string,
+    hint?: string,
+    maxLength?: number,
+  ) {
     const error = fieldErrors[name]
     const errorId = `${name}-error`
     const hintId = `${name}-hint`
@@ -197,6 +203,7 @@ export function BookingPage() {
           {label}
           <input
             type={type}
+            maxLength={maxLength}
             value={guest[name]}
             onChange={(e) => setGuest((current) => ({ ...current, [name]: e.target.value }))}
             aria-invalid={error ? true : undefined}
@@ -464,6 +471,8 @@ export function BookingPage() {
               'О чём хотите поговорить? (необязательно)',
               'text',
               'Тему увидит владелец календаря — не пишите конфиденциальное.',
+              // Тот же предел, что проверяет сервер: гость не набирает лишнее и не получает 400
+              200,
             )}
             {(startError || formError) && (
               <p role="alert" className="alert">
