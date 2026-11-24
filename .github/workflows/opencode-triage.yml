@@ -68,6 +68,9 @@ jobs:
         run: opencode github run
         env:
           MODEL: opencode/claude-haiku-5-5
+          # В CI некому ответить на запрос разрешения: «ask» вешает агента до тайм-аута (PR #21 —
+          # external_directory после cd ..). Запросы, которые в CI некому подтвердить, — сразу отказ.
+          OPENCODE_PERMISSION: '{"external_directory":"deny","doom_loop":"deny","question":"deny"}'
           # Модель агента — платная OpenCode Zen claude-haiku-5-5, оплата по факту (ключ OPENCODE_API_KEY);
           # служебная модель для заголовков сессий — Gemini Flash Lite (opencode.json)
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
