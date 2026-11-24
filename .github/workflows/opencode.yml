@@ -122,21 +122,36 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      # anomalyco/opencode/github v1.19.6, закреплено по SHA.
+      # OpenCode 1.19.6 из GitHub Releases с проверкой sha256. Раньше здесь был composite-action
+      # anomalyco/opencode/github: его шаг «Get opencode version» спрашивает версию у GitHub API без
+      # токена и падал на лимите анонимных запросов общего IP раннеров (а сбой съедал попытку бюджета).
+      - name: Install OpenCode CLI
+        env:
+          OPENCODE_VERSION: 1.19.6
+          OPENCODE_SHA256: 47734e08968b30cc22a0bffb6d9feeed76ad4aa743213a12122040392d09a057
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.opencode/bin"
+          curl -fsSL --retry 3 -o /tmp/opencode.tar.gz \
+            "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-x64.tar.gz"
+          echo "${OPENCODE_SHA256}  /tmp/opencode.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/opencode.tar.gz -C "$HOME/.opencode/bin"
+          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+
+      # То же, что делал action: opencode github run (токен GitHub App через OIDC, ответ комментарием).
       # Скиллы берутся из .claude/skills/ (OpenCode читает этот каталог), правила — из AGENTS.md,
       # настройки трекера — из docs/agents/: всё это приходит вместе с checkout.
       - name: Run OpenCode
-        uses: anomalyco/opencode/github@f4e363c8295fa90a03dddc451882fffe8fbce357 # v1.19.6
+        run: opencode github run
         env:
-          # Модель агента — платная OpenCode Zen gpt-5-nano, оплата по факту (ключ OPENCODE_API_KEY); служебная модель для
-          # заголовков сессий — Gemini Flash Lite (opencode.json), чтобы не тратить на неё лимит Zen
+          MODEL: opencode/gpt-5-nano
+          MENTIONS: /oc,/opencode
+          # Модель агента — платная OpenCode Zen gpt-5-nano, оплата по факту (ключ OPENCODE_API_KEY);
+          # служебная модель для заголовков сессий — Gemini Flash Lite (opencode.json)
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
           # Без него gh в шагах агента не авторизован
           GH_TOKEN: ${{ github.token }}
-        with:
-          model: opencode/gpt-5-nano
-          mentions: /oc,/opencode
 
   # Если модель не вызывалась из-за бюджета или задание агента не завершилось успехом,
   # зовём человека: причина, последний head SHA PR и ссылка на прогон.
