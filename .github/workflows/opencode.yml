@@ -144,9 +144,9 @@ jobs:
       - name: Run OpenCode
         run: opencode github run
         env:
-          MODEL: opencode/gpt-5-nano
+          MODEL: opencode/claude-haiku-5-5
           MENTIONS: /oc,/opencode
-          # Модель агента — платная OpenCode Zen gpt-5-nano, оплата по факту (ключ OPENCODE_API_KEY);
+          # Модель агента — платная OpenCode Zen claude-haiku-5-5, оплата по факту (ключ OPENCODE_API_KEY);
           # служебная модель для заголовков сессий — Gemini Flash Lite (opencode.json)
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
