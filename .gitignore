@@ -15,3 +15,7 @@ frontend/src/api/generated/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Отчёты аудита Lighthouse (воркфлоу lighthouse-audit): только артефакты, не коммитятся
+.audit/
+.lighthouseci/
